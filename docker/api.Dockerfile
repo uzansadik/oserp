@@ -1,4 +1,7 @@
 # syntax=docker/dockerfile:1
+#
+# API servisi imaji (@oserp-community/api)
+# Build context: repo koku. Compose'dan `docker/api.Dockerfile` ile referans alinir.
 
 # ---- temel pnpm tabani ----
 FROM node:24-bookworm-slim AS base

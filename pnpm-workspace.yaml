@@ -5,6 +5,8 @@ packages:
 allowBuilds:
   argon2: true
   esbuild: false
+  sharp: true
+  unrs-resolver: true
 
 catalog:
   turbo: ^2.9.16
@@ -25,3 +27,4 @@ catalog:
 minimumReleaseAgeExclude:
   - react-dom@19.2.7
   - react@19.2.7
+  - shadcn@4.11.0

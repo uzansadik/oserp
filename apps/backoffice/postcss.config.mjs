@@ -1,0 +1,1 @@
+export { default } from "@oserp-community/ui/postcss.config";

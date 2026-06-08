@@ -12,7 +12,7 @@
 
 | Karar                 | Seçim                                                         |
 | --------------------- | ------------------------------------------------------------- |
-| Framework             | Next.js 15 (App Router, TypeScript, React 19)                 |
+| Framework             | Next.js 16 (App Router, TypeScript, React 19)                 |
 | UI kütüphanesi        | shadcn/ui → `@oserp-community/ui` (Tailwind v4)               |
 | Container kontrolü    | Docker socket mount + `dockerode`                             |
 | Servis imajları       | GHCR (`ghcr.io/uzansadik/oserp-*:latest`) + GitHub Actions    |
@@ -22,41 +22,44 @@
 
 ---
 
-## Faz 0 — Scaffold (shadcn monorepo entegrasyonu)
+## Faz 0 — Scaffold (shadcn monorepo entegrasyonu) ✅
 
-> **Bu faz mevcut workspace ile çakışan bir alana dokunur; dikkatli yapılmalı.**
-> shadcn `init --monorepo` yeni bir monorepo oluşturur, bizimki mevcut bir pnpm
-> workspace. Bu yüzden geçici bir dizinde init edip üretilen yapıyı entegre
-> edeceğiz.
+> Bitti. Geçici dizinde `shadcn init --name backoffice --template next --monorepo --preset bJMSkfGi`
+> ile üretilen yapı `apps/backoffice` ve `packages/ui` olarak workspace'e
+> entegre edildi. Mevcut Turborepo + pnpm workspace ayarları aynen kullanıldı;
+> ek olarak `pnpm-workspace.yaml#allowBuilds` içine `sharp: true` ve
+> `unrs-resolver: true` eklendi, `.gitignore` içine `.next/` eklendi.
 
-- [ ] **0.1** Geçici bir dizinde scaffold üret:
-      ```bash
-      cd $env:TEMP
-      pnpm dlx shadcn@latest init --preset bJMSkfGi --template next
+- [x] **0.1** Geçici bir dizinde scaffold üret:
+      ```powershell
+      $tmp = "C:\Temp\shadcn-mono"
+      Set-Location $tmp
+      pnpm dlx shadcn@latest init --name backoffice --template next --monorepo --preset bJMSkfGi --yes
       ```
-- [ ] **0.2** Üretilen `apps/web` → `community/apps/backoffice` olarak taşı.
-      `package.json` adı `@oserp-community/backoffice`.
-- [ ] **0.3** Üretilen `packages/ui` → `community/packages/ui` olarak taşı.
-      `package.json` adı `@oserp-community/ui`. Hiçbir kaynak dosyaya elle
-      dokunma — shadcn'in oluşturduğu yapıyı koru.
-- [ ] **0.4** `apps/backoffice/components.json` içindeki workspace alias'larını
-      `@workspace/ui` → `@oserp-community/ui` olarak güncelle (importlar ve
-      `ui`/`utils` alias'ları).
-- [ ] **0.5** `apps/backoffice/package.json#imports` ve `@oserp-community/ui`'a
-      olan `workspace:*` bağımlılığını doğrula.
-- [ ] **0.6** Kök `pnpm-workspace.yaml` zaten `apps/*` ve `packages/*` içerir;
-      değişiklik gerekmez. `pnpm install` çalıştır.
-- [ ] **0.7** Kök `turbo.json`'a yeni bir `dev`/`build` görevi eklemek gerekirse
-      ekle (mevcut görevler workspace-wide çalışacağından muhtemelen
-      gerekmez).
-- [ ] **0.8** `apps/backoffice/package.json` script'leri:
-      `dev: next dev -p 8000`, `start: next start -p 8000`, `build: next build`,
-      `typecheck: tsc --noEmit`.
-- [ ] **0.9** Sağlama: `pnpm --filter @oserp-community/backoffice dev` → tarayıcıda
-      `http://localhost:8000` shadcn başlangıç sayfası açılmalı.
+- [x] **0.2** Üretilen `apps/web` → `community/apps/backoffice` olarak kopyalandı.
+      `package.json` adı `@oserp-community/backoffice`, port 8000.
+- [x] **0.3** Üretilen `packages/ui` → `community/packages/ui` olarak kopyalandı.
+      `package.json` adı `@oserp-community/ui`.
+- [x] **0.4** `components.json` ve tüm import yolları
+      `@workspace/ui` → `@oserp-community/ui` olarak yeniden yazıldı.
+- [x] **0.5** `apps/backoffice/package.json` `@oserp-community/ui: workspace:*`
+      bağımlılığı ile bağlandı; `@workspace/eslint-config` ve
+      `@workspace/typescript-config` (shadcn scaffold'una özgü) atıldı —
+      bizim kök Biome + base tsconfig'imiz kullanılıyor.
+- [x] **0.6** `pnpm install` — 376 paket eklendi, lockfile güncel.
+- [x] **0.7** Mevcut `turbo.json` `build`/`dev` görevleri yeterli; ek görev
+      gerekmedi (`.next/**` zaten `outputs`'ta vardı).
+- [x] **0.8** Scriptler: `dev: next dev -p 8000`, `start: next start -p 8000`,
+      `build: next build`, `typecheck: tsc --noEmit`.
+- [x] **0.9** Sağlama: `pnpm --filter @oserp-community/backoffice build` yeşil,
+      dev server `http://localhost:8000/demo` üzerinde 200 OK döndü.
+- [x] **0.10** `/demo` sayfası eklendi: 15 shadcn componenti
+      (button, badge, card, alert, avatar, input, label, select, switch,
+      separator, tabs, table, textarea, tooltip, dialog) galeri olarak sergileniyor.
+      Ana sayfada `/demo`'ya link bulunur.
 
-**Çıktı:** Boş Next.js + shadcn iskeleti, port 8000'de çalışıyor. UI paketi
-hazır, `pnpm dlx shadcn@latest add <component>` ile bileşen eklenebilir.
+**Çıktı:** Next.js + shadcn iskeleti port 8000'de çalışıyor, UI paketi hazır,
+`pnpm dlx shadcn@latest add <component>` ile bileşen eklenebilir.
 
 ---
 
@@ -156,7 +159,7 @@ hazır, `pnpm dlx shadcn@latest add <component>` ile bileşen eklenebilir.
 
 ## Faz 5 — UI (dashboard)
 
-> shadcn bileşenleri burada eklenir: `pnpm dlx shadcn@latest add card button table form input dialog toast badge`.
+
 
 - [ ] **5.1** Layout: sidebar (Servisler, Ayarlar, Çıkış) + topbar.
 - [ ] **5.2** `app/setup/page.tsx` — admin oluşturma sihirbazı (3 adım: hesap,

@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # Guvenlik: veritabani yalnizca dahili docker agindan erisilebilir,
+    # host'a port acilmaz.
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ['node', 'apps/api/dist/migrate.js']
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - '${API_PORT:-3000}:3000'
+    restart: unless-stopped
+
+volumes:
+  pgdata:

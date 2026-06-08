@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "baseUrl": "..",
+    "noEmit": true,
+    "paths": {
+      "@oserp-community/iam/*": ["./src/*"]
+    }
+  },
+  "include": ["**/*.ts", "../src/**/*.ts"]
+}

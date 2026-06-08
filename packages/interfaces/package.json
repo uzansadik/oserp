@@ -1,0 +1,21 @@
+{
+  "name": "@oserp-community/interfaces",
+  "version": "0.0.0",
+  "description": "Interfaces module for Oserp Community",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,14 @@
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@oserp-community/iam': '/src',
+    },
+  },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['./**/*.test.ts', './**/*.spec.ts'],
+  },
+});

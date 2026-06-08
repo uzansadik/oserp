@@ -1,0 +1,48 @@
+{
+  "name": "@oserp-community/iam",
+  "version": "0.0.0",
+  "description": "IAM module for Oserp Community",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./domain": {
+      "import": "./dist/domain/index.mjs",
+      "types": "./dist/domain/index.d.mts"
+    },
+    "./api": {
+      "import": "./dist/api/index.mjs",
+      "types": "./dist/api/index.d.mts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "argon2": "^0.44.0",
+    "crypto": "^1.0.1",
+    "dotenv": "catalog:",
+    "drizzle-orm": "catalog:",
+    "fastify": "^5.2.0",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

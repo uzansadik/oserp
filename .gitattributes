@@ -1,0 +1,2 @@
+# Shell script'leri her zaman LF satir sonu ile (Linux/Docker uyumlulugu)
+*.sh text eol=lf

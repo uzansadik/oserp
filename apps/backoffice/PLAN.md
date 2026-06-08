@@ -63,21 +63,34 @@
 
 ---
 
-## Faz 1 — Veri katmanı (SQLite + servisler tablosu)
+## Faz 1 — Veri katmanı (SQLite + servisler tablosu) ✅
 
-- [ ] **1.1** `better-sqlite3` ve `drizzle-orm` ekle (drizzle-orm SQLite
-      adapter'ı zaten ekosistemde tanıdık).
-- [ ] **1.2** `src/server/db.ts` — `/data/backoffice.db` üzerinde Drizzle
-      bağlantısı. Yol env (`BACKOFFICE_DB_PATH`) ile değiştirilebilir.
-- [ ] **1.3** Şema (`src/server/schema.ts`):
+- [x] **1.1** `@libsql/client` + `drizzle-orm` + `drizzle-kit` eklendi.
+      (Not: `better-sqlite3` yerine `@libsql/client` tercih edildi — Windows +
+      Node 24'te native compile zorluğu yok, prebuild binary'lerle çalışıyor.)
+- [x] **1.2** `server/db.ts` — `@libsql/client` üzerinden Drizzle bağlantısı.
+      Async lazy singleton (`Promise<Holder>` globalThis cache). Yol env
+      (`BACKOFFICE_DB_PATH`) ile değiştirilebilir; default: prod
+      `/data/backoffice.db`, dev `.data/backoffice.db`.
+- [x] **1.3** Şema (`server/schema.ts`):
       - `admin_users(id, email, password_hash, created_at)`
       - `services(name PK, image, current_tag, status, last_started_at)`
       - `service_events(id, service_name, kind, payload_json, at)`
-- [ ] **1.4** `src/server/migrate.ts` — uygulama başlangıcında otomatik
-      `drizzle-kit migrate` veya el-yazısı `init.sql` uygulaması.
-- [ ] **1.5** Repository sınıfları (`AdminUsersRepository`, `ServicesRepository`).
+      - + index: `idx_service_events_service_name`
+- [x] **1.4** `server/migrate.ts` — el-yazısı `MIGRATIONS` dizisi +
+      `backoffice_migrations(id PK, applied_at)` tracker tablosu. Her id için
+      idempotent uygulama (`executeMultiple`), uygulanan migration'lar
+      atlanır. İlk migration `0001_init`.
+- [x] **1.5** Repository sınıfları:
+      - `AdminUsersRepository` (`count`, `findByEmail`, `findById`, `create`)
+      - `ServicesRepository` (`list`, `findByName`, `upsert`, `updateStatus`,
+        `remove`, `recordEvent`, `listEvents`)
+      - `server/index.ts` barrel: `getContext()` -> `{ adminUsers, services }`
+- [x] **Validation**: `pnpm typecheck` ✅, `pnpm build` ✅,
+      `GET /api/health` 200 OK -> `{adminCount:0, serviceCount:0}` (migrations
+      runtime'da otomatik koştu).
 
-**Çıktı:** Persistent durum yazma/okuma çalışıyor.
+**Çıktı:** Persistent durum yazma/okuma çalışıyor — `/api/health` doğruluyor.
 
 ---
 

@@ -94,19 +94,32 @@
 
 ---
 
-## Faz 2 — Auth (ilk açılış sihirbazı + oturum)
+## Faz 2 — Auth (ilk açılış sihirbazı + oturum) ✅
 
-- [ ] **2.1** `src/server/auth/passwords.ts` — `argon2` ile hash/verify.
-- [ ] **2.2** `src/server/auth/session.ts` — HttpOnly + SameSite=Strict +
-      Secure cookie, opaque token, DB'de session tablosu (veya JWT HS256;
-      basitlik için cookie+DB).
-- [ ] **2.3** `app/setup/page.tsx` + `POST /api/setup` — `admin_users` boşsa
-      e-posta + parola al, kaydet, cookie set et, dashboard'a yönlendir.
-- [ ] **2.4** `app/login/page.tsx` + `POST /api/login` — credentials → session.
-- [ ] **2.5** `middleware.ts` (Next.js) — `/setup` ve `/login` dışındaki
-      route'larda cookie zorunlu; yoksa `/login`'a redirect. Admin yoksa
-      `/setup`'a redirect.
-- [ ] **2.6** `POST /api/logout`.
+- [x] **2.1** `server/auth/passwords.ts` — `argon2id` hash/verify
+      (memoryCost=19456, timeCost=2, parallelism=1).
+- [x] **2.2** `server/auth/session.ts` + `sessions-repository.ts` — opaque
+      token (32 byte base64url) + DB `sessions` tablosu (`token PK, user_id,
+      expires_at, created_at` + indexler). Cookie: `bo_session`, HttpOnly,
+      SameSite=Strict, Secure (prod), Path=/, Max-Age 7 gün.
+- [x] **2.3** `app/setup/page.tsx` + `POST /api/setup` — admin yoksa
+      e-posta + parola (min 12 karakter) al, hash'le, kaydet, session
+      oluştur, `/`'a yönlendir. Admin varsa otomatik `/login` veya `/`'a
+      redirect.
+- [x] **2.4** `app/login/page.tsx` + `POST /api/login` — credentials ->
+      session. Admin yoksa `/setup`'a, oturum varsa `/`'a redirect.
+- [x] **2.5** `proxy.ts` (Next.js 16'da `middleware.ts`'in yeni adı) —
+      `/setup`, `/login`, `/api/setup`, `/api/login`, `/api/health` dışındaki
+      route'larda `bo_session` cookie'si zorunlu; yoksa `/login`'a redirect.
+      Static asset'ler matcher'dan dışlandı.
+- [x] **2.6** `POST /api/logout` + `LogoutButton` componenti — DB session'ı
+      siler, cookie'yi Max-Age=0 ile boşaltır, `/login`'a yönlendirir.
+- [x] **Validation**: typecheck ✅, build ✅ (warning yok), uçtan-uca curl
+      akışı: unauth `/` -> 307 `/login` -> 307 `/setup` -> 200 sihirbaz |
+      `POST /api/setup` -> 200 + Set-Cookie | auth `/` -> 200
+      "Giriş yapıldı: admin@oserp.local" | `/api/health` adminCount=1 |
+      `POST /api/logout` -> cookie temizleniyor | post-logout `/` -> 307
+      `/login` | ikinci setup -> 409.
 
 **Çıktı:** Backoffice'e giriş gerektiriyor; admin yoksa sihirbaz açılıyor.
 

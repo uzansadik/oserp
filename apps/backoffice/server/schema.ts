@@ -30,6 +30,15 @@ export const serviceEvents = sqliteTable('service_events', {
     .default(sql`(unixepoch() * 1000)`),
 });
 
+export const sessions = sqliteTable('sessions', {
+  token: text('token').primaryKey(),
+  userId: integer('user_id').notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
 export type AdminUserRow = typeof adminUsers.$inferSelect;
 export type NewAdminUserRow = typeof adminUsers.$inferInsert;
 export type ServiceRow = typeof services.$inferSelect;
@@ -37,3 +46,5 @@ export type NewServiceRow = typeof services.$inferInsert;
 export type ServiceEventRow = typeof serviceEvents.$inferSelect;
 export type NewServiceEventRow = typeof serviceEvents.$inferInsert;
 export type ServiceStatus = ServiceRow['status'];
+export type SessionRow = typeof sessions.$inferSelect;
+export type NewSessionRow = typeof sessions.$inferInsert;

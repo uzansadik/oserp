@@ -99,6 +99,9 @@ importers:
       '@oserp-community/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      argon2:
+        specifier: ^0.44.0
+        version: 0.44.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@libsql/client@0.15.15)(@types/pg@8.20.0)(pg@8.21.0)

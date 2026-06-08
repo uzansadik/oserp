@@ -37,6 +37,20 @@ const MIGRATIONS: readonly Migration[] = [
         ON service_events(service_name);
     `,
   },
+  {
+    id: '0002_sessions',
+    sql: `
+      CREATE TABLE IF NOT EXISTS sessions (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+    `,
+  },
 ];
 
 export async function runMigrations(client: Client): Promise<void> {

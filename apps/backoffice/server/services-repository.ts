@@ -35,6 +35,7 @@ export class ServicesRepository {
           currentTag: row.currentTag,
           status: row.status,
           lastStartedAt: row.lastStartedAt ?? null,
+          ...(row.envJson !== undefined ? { envJson: row.envJson } : {}),
         },
       })
       .returning();
@@ -53,6 +54,27 @@ export class ServicesRepository {
         ...(lastStartedAt !== undefined ? { lastStartedAt } : {}),
       })
       .where(eq(services.name, name));
+  }
+
+  async saveEnv(name: string, env: Record<string, string>): Promise<void> {
+    await this.db
+      .update(services)
+      .set({ envJson: JSON.stringify(env) })
+      .where(eq(services.name, name));
+  }
+
+  async getEnv(name: string): Promise<Record<string, string>> {
+    const row = await this.findByName(name);
+    if (!row) return {};
+    try {
+      const parsed = JSON.parse(row.envJson) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
   }
 
   async remove(name: string): Promise<void> {

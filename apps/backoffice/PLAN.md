@@ -177,41 +177,51 @@
 
 ---
 
-## Faz 4 — Servis kataloğu ve kurulum akışı
+## Faz 4 — Servis kataloğu ve kurulum akışı ✅
 
-- [ ] **4.1** Statik bir servis kataloğu (`src/server/catalog.ts`):
-      ```ts
-      export const SERVICE_CATALOG = {
-        iam: {
-          image: 'ghcr.io/uzansadik/oserp-api',
-          ports: { 3000: 3000 },
-          envSpec: ['DATABASE_URL', 'JWT_SECRET'],
-          dependsOn: ['postgres'],
-          postInstall: [{ kind: 'migrate', image: '...', command: ['node', 'apps/api/dist/migrate.js'] }],
-        },
-        postgres: {
-          image: 'postgres',
-          tag: '16-bookworm',
-          ports: {},  // sadece iç ağ
-          envSpec: ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB'],
-          volumes: ['oserp-pgdata:/var/lib/postgresql/data'],
-        },
-        // ileride: catalog, sales, ...
-      } as const;
-      ```
-- [ ] **4.2** "Install service" akışı:
-      1. Gerekli env değişkenlerini formdan al, **rastgele sırlar** üret
-         (DB parolası, JWT_SECRET).
-      2. Bağımlılıkları (örn. postgres) önce kur.
-      3. `pull → run → (varsa) post-install migrate container`.
-      4. `services` tablosuna kaydet, `service_events` logla.
-- [ ] **4.3** Versiyon güncelleme: `POST /api/services/:name/update` → yeni
-      tag pull → eski container'ı durdur → yeniyi başlat.
-- [ ] **4.4** Tek bir docker network'ü (`oserp-net`) oluştur ve tüm servisleri
-      buna bağla, böylece `iam` → `postgres` host adı `postgres` üzerinden
-      ulaşır.
+- [x] **4.1** Statik servis kataloğu (`server/catalog.ts`): `postgres` (16-bookworm,
+      named volume `oserp-pgdata`) + `iam` (`ghcr.io/uzansadik/oserp-api`,
+      `dependsOn: ['postgres']`). `EnvSpecField` her alan için `default`,
+      `generate: 'password'|'secret-hex'|'secret-base64'` veya `optional`
+      destekler. `iam.internalEnvFromDeps.DATABASE_URL` postgres user/password/db
+      değerlerini okuyup `postgresql://...@postgres:5432/...` dizesini üretir
+      (servisler `oserp-net` ağında olduğundan host adı = servis adı).
+      `resolveInstallOrder(target)` döngüsel bağımlılığı yakalar.
+- [x] **4.2** `InstallOrchestrator` (`server/install-orchestrator.ts`):
+      1. `resolveInstallOrder` → deps önce.
+      2. `ensureNetwork('oserp-net')`.
+      3. Her servis için: `getEnv` (mevcut DB env'i koru) + `resolveEnvForEntry`
+         (user input > existing > generated > default; eksik zorunlu hata),
+         + `internalEnvFromDeps` (deps env'inden türetilir).
+      4. `upsert(status='installing', envJson)` + `pullImage` + `runContainer`
+         (`oserp-net`, restart=unless-stopped) + `updateStatus('running')`.
+      5. `postInstall` adımları: `runOnce` (yeni `DockerService.runOnce`
+         metodu — start + wait + log + remove, exit≠0 throw). `iam` için
+         `node dist/migrate.js` aynı env + ağ ile çalıştırılır.
+      6. Her geçiş `service_events`'e kayıt düşer (`install_started`,
+         `install_succeeded`, `install_failed`, `post_install_migrate`).
+      7. Üretilen sırlar (generated) install report'unda dönülür (UI bir
+         kez gösterip kaybedebilir).
+- [x] **4.3** `POST /api/services/:name/update` — yeni tag pull + container
+      yeniden başlat (mevcut env korunur). `updating` → `running` veya
+      `failed`. `update_started/succeeded/failed` event'leri.
+      `GET /api/catalog` (kullanıcıya zarif şema, generated ve default
+      flag'leri ile) ve `POST /api/catalog/:name/install` (free-form
+      `POST /api/services/:name/install` da korundu).
+- [x] **4.4** Tek docker network'ü: `NETWORK_NAME = 'oserp-net'`,
+      orchestrator install başında `ensureNetwork` çağırır. Tüm container'lar
+      `NetworkMode: 'oserp-net'` ile başlar, dahili DNS servis adıyla çalışır.
+- [x] **Şema/migration**: `services.env_json TEXT NOT NULL DEFAULT '{}'`
+      kolonu + `0003_services_env` migration. `ServicesRepository.getEnv` ve
+      `saveEnv` yardımcıları.
+- [x] **Validation**: typecheck ✅, build ✅ (17 route). Curl smoke:
+      `GET /api/catalog` 200 (postgres+iam doğru), `POST /api/catalog/iam/install`
+      daemon yok → 502 `connect ENOENT` (DB pollute olmuyor çünkü
+      ensureNetwork ilk adımda fail), unknown catalog → 404,
+      `POST /api/services/iam/update` missing tag → 400, unknown service → 404.
 
-**Çıktı:** Tek tıkla `iam` servisi (postgres + migration + api) ayağa kalkıyor.
+**Çıktı:** Tek tıkla `iam` servisi (postgres + migration + api) ayağa kalkıyor
+(Docker daemon mevcutsa). Bağımlılıklar otomatik kurulur, sırlar otomatik üretilir.
 
 ---
 

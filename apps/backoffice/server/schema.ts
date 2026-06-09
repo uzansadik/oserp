@@ -18,6 +18,7 @@ export const services = sqliteTable('services', {
     enum: ['installing', 'running', 'stopped', 'updating', 'failed'],
   }).notNull(),
   lastStartedAt: integer('last_started_at', { mode: 'timestamp_ms' }),
+  envJson: text('env_json').notNull().default('{}'),
 });
 
 export const serviceEvents = sqliteTable('service_events', {

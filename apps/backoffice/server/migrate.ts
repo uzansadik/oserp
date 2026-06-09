@@ -51,6 +51,12 @@ const MIGRATIONS: readonly Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     `,
   },
+  {
+    id: '0003_services_env',
+    sql: `
+      ALTER TABLE services ADD COLUMN env_json TEXT NOT NULL DEFAULT '{}';
+    `,
+  },
 ];
 
 export async function runMigrations(client: Client): Promise<void> {

@@ -242,6 +242,66 @@ export class DockerService {
     if (networks.some((n) => n.Name === name)) return;
     await this.docker.createNetwork({ Name: name, Driver: 'bridge' });
   }
+
+  async runOnce(spec: {
+    name: string;
+    image: string;
+    tag: string;
+    command: string[];
+    env?: Record<string, string>;
+    network?: string;
+  }): Promise<{ exitCode: number; logs: string }> {
+    await this.removeContainer(spec.name, { ignoreMissing: true });
+    const env = spec.env
+      ? Object.entries(spec.env).map(([k, v]) => `${k}=${v}`)
+      : undefined;
+    const created = await this.docker.createContainer({
+      name: spec.name,
+      Image: `${spec.image}:${spec.tag}`,
+      Cmd: spec.command,
+      ...(env ? { Env: env } : {}),
+      Labels: {
+        [LABEL_MANAGED_BY]: 'true',
+        'oserp.backoffice.run-once': 'true',
+      },
+      HostConfig: {
+        ...(spec.network ? { NetworkMode: spec.network } : {}),
+        RestartPolicy: { Name: 'no' },
+        AutoRemove: false,
+      },
+    });
+    try {
+      await created.start();
+      const result = await created.wait();
+      const exitCode = typeof result.StatusCode === 'number' ? result.StatusCode : -1;
+      const logBuf = (await created.logs({
+        follow: false,
+        stdout: true,
+        stderr: true,
+        tail: 'all' as unknown as number,
+        timestamps: false,
+      })) as Buffer;
+      const logs = stripMultiplexHeader(logBuf).toString('utf8');
+      return { exitCode, logs };
+    } finally {
+      await this.removeContainer(spec.name, { ignoreMissing: true });
+    }
+  }
+}
+
+function stripMultiplexHeader(chunk: Buffer): Buffer {
+  const parts: Buffer[] = [];
+  let offset = 0;
+  while (offset + 8 <= chunk.length) {
+    const size = chunk.readUInt32BE(offset + 4);
+    const start = offset + 8;
+    const end = start + size;
+    if (end > chunk.length) break;
+    parts.push(chunk.subarray(start, end));
+    offset = end;
+  }
+  if (parts.length === 0) return chunk;
+  return Buffer.concat(parts);
 }
 
 function isNotFound(err: unknown): boolean {

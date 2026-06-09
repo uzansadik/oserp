@@ -19,6 +19,8 @@ RUN apt-get update \
 
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+# public/ klasoru opsiyonel; runner COPY'sinin patlamamasi icin garanti altina al.
+RUN mkdir -p apps/backoffice/public
 RUN pnpm --filter @oserp-community/backoffice... build
 
 # ---- production runtime ----

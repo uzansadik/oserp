@@ -1,29 +1,31 @@
 #!/usr/bin/env bash
 #
-# Oserp Community - Ubuntu LTS Docker kurulum script'i
+# Oserp Community - Ubuntu LTS Backoffice kurulum script'i
 #
 # Bu script bir Ubuntu LTS sunucusunda asagidakileri yapar:
 #   1. Sistemi gunceller (apt update/upgrade)
 #   2. Temel guvenlik ayarlarini uygular (ufw, fail2ban, otomatik guvenlik
 #      guncellemeleri)
 #   3. Docker Engine + Compose eklentisini resmi depodan kurar
-#   4. Repoyu klonlar, rastgele sirlarla bir .env uretir ve Docker ile ayaga
-#      kaldirir (migration dahil)
+#   4. GHCR'den oserp-backoffice imajini ceker ve tek container olarak
+#      ayaga kaldirir (Docker socket + persistent volume + port 8000)
+#
+# Tum dahili servisleri (postgres, iam api, vb.) backoffice tarayicidan
+# yonetir; bu script repo klonlamaz, .env uretmez, compose calistirmaz.
 #
 # Kullanim (root veya sudo ile):
-#   sudo ./scripts/install.sh
-#   # veya farkli bir repo icin:
-#   sudo REPO_URL=https://github.com/<org>/<repo>.git ./scripts/install.sh
+#   sudo bash install.sh
+#   # veya
+#   curl -fsSL https://raw.githubusercontent.com/uzansadik/oserp/main/scripts/install.sh | sudo bash
 #
 # Opsiyonel ortam degiskenleri:
-#   REPO_URL      (vars: https://github.com/uzansadik/oserp.git) Klonlanacak repo
-#   BRANCH        (vars: main)        Klonlanacak dal
-#   APP_DIR       (vars: /opt/community) Uygulama dizini
-#   API_PORT      (vars: 3000)        Host'ta yayinlanacak API portu
-#   POSTGRES_USER (vars: community)   Veritabani kullanicisi
-#   POSTGRES_DB   (vars: community)   Veritabani adi
-#   SSH_PORT      (vars: 22)          ufw'da izin verilecek SSH portu
-#   JWT_ISSUER    (vars: oserp-community)
+#   IMAGE          (vars: ghcr.io/uzansadik/oserp-backoffice:latest)
+#   CONTAINER_NAME (vars: oserp-backoffice)
+#   DATA_DIR       (vars: /var/lib/oserp-backoffice) Backoffice SQLite + state
+#   PORT           (vars: 8000)  Host'ta yayinlanacak backoffice portu
+#   SSH_PORT       (vars: 22)    ufw'da izin verilecek SSH portu
+#   DOCKER_NETWORK (vars: oserp-net) Yonetilen servislerin paylasacagi ag
+#   SKIP_SYSTEM    (vars: 0)     1 ise apt update/upgrade + guvenlik atlanir
 #
 set -euo pipefail
 
@@ -41,33 +43,21 @@ require_root() {
   fi
 }
 
-gen_secret() {
-  # 32 baytlik hex rastgele sir
-  openssl rand -hex 32
-}
-
 # ---------------------------------------------------------------------------
-# Yapilandirma (ortam degiskenlerinden okunur, varsayilanlarla)
+# Yapilandirma
 # ---------------------------------------------------------------------------
-REPO_URL="${REPO_URL:-${1:-https://github.com/uzansadik/oserp.git}}"
-BRANCH="${BRANCH:-main}"
-APP_DIR="${APP_DIR:-/opt/community}"
-API_PORT="${API_PORT:-3000}"
-POSTGRES_USER="${POSTGRES_USER:-community}"
-POSTGRES_DB="${POSTGRES_DB:-community}"
+IMAGE="${IMAGE:-ghcr.io/uzansadik/oserp-backoffice:latest}"
+CONTAINER_NAME="${CONTAINER_NAME:-oserp-backoffice}"
+DATA_DIR="${DATA_DIR:-/var/lib/oserp-backoffice}"
+PORT="${PORT:-8000}"
 SSH_PORT="${SSH_PORT:-22}"
-JWT_ISSUER="${JWT_ISSUER:-oserp-community}"
+DOCKER_NETWORK="${DOCKER_NETWORK:-oserp-net}"
+SKIP_SYSTEM="${SKIP_SYSTEM:-0}"
 
 # ---------------------------------------------------------------------------
 # 0. On kontroller
 # ---------------------------------------------------------------------------
 require_root
-
-if [[ -z "${REPO_URL}" ]]; then
-  err "REPO_URL belirtilmedi."
-  err "Ornek: sudo REPO_URL=https://github.com/org/repo.git ./scripts/install.sh"
-  exit 1
-fi
 
 if ! grep -qi 'ubuntu' /etc/os-release 2>/dev/null; then
   warn "Bu script Ubuntu LTS icin tasarlandi. Farkli bir dagitim tespit edildi; devam ediliyor."
@@ -76,36 +66,37 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 # ---------------------------------------------------------------------------
-# 1. Sistemi guncelle
+# 1. Sistem ve guvenlik (opsiyonel)
 # ---------------------------------------------------------------------------
-log "Sistem paketleri guncelleniyor..."
-apt-get update -y
-apt-get upgrade -y
+if [[ "${SKIP_SYSTEM}" != "1" ]]; then
+  log "Sistem paketleri guncelleniyor..."
+  apt-get update -y
+  apt-get upgrade -y
 
-log "Temel araclar kuruluyor..."
-apt-get install -y --no-install-recommends \
-  ca-certificates curl gnupg git openssl ufw fail2ban unattended-upgrades
+  log "Temel araclar kuruluyor..."
+  apt-get install -y --no-install-recommends \
+    ca-certificates curl gnupg ufw fail2ban unattended-upgrades
+
+  log "Guvenlik duvari (ufw) yapilandiriliyor..."
+  ufw default deny incoming
+  ufw default allow outgoing
+  ufw allow "${SSH_PORT}/tcp" comment 'SSH'
+  ufw allow "${PORT}/tcp" comment 'Oserp Backoffice'
+  ufw --force enable
+  ufw status verbose || true
+
+  log "Otomatik guvenlik guncellemeleri etkinlestiriliyor..."
+  dpkg-reconfigure -f noninteractive unattended-upgrades || true
+  systemctl enable --now unattended-upgrades || true
+
+  log "fail2ban (SSH koruma) etkinlestiriliyor..."
+  systemctl enable --now fail2ban || true
+else
+  log "SKIP_SYSTEM=1 -> apt/guvenlik adimlari atlandi."
+fi
 
 # ---------------------------------------------------------------------------
-# 2. Guvenlik ayarlari
-# ---------------------------------------------------------------------------
-log "Guvenlik duvari (ufw) yapilandiriliyor..."
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow "${SSH_PORT}/tcp" comment 'SSH'
-ufw allow "${API_PORT}/tcp" comment 'Community API'
-ufw --force enable
-ufw status verbose || true
-
-log "Otomatik guvenlik guncellemeleri etkinlestiriliyor..."
-dpkg-reconfigure -f noninteractive unattended-upgrades || true
-systemctl enable --now unattended-upgrades || true
-
-log "fail2ban (SSH koruma) etkinlestiriliyor..."
-systemctl enable --now fail2ban || true
-
-# ---------------------------------------------------------------------------
-# 3. Docker kurulumu (resmi Docker apt deposu)
+# 2. Docker kurulumu (resmi Docker apt deposu)
 # ---------------------------------------------------------------------------
 if command -v docker >/dev/null 2>&1; then
   log "Docker zaten kurulu: $(docker --version)"
@@ -137,63 +128,52 @@ if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Repoyu klonla / guncelle
+# 3. Veri dizini ve docker ag
 # ---------------------------------------------------------------------------
-if [[ -d "${APP_DIR}/.git" ]]; then
-  log "Mevcut repo guncelleniyor: ${APP_DIR}"
-  git -C "${APP_DIR}" fetch --all --prune
-  git -C "${APP_DIR}" checkout "${BRANCH}"
-  git -C "${APP_DIR}" pull --ff-only origin "${BRANCH}"
+log "Veri dizini hazirlaniyor: ${DATA_DIR}"
+mkdir -p "${DATA_DIR}"
+chmod 700 "${DATA_DIR}"
+
+if ! docker network inspect "${DOCKER_NETWORK}" >/dev/null 2>&1; then
+  log "Docker ag olusturuluyor: ${DOCKER_NETWORK}"
+  docker network create "${DOCKER_NETWORK}"
 else
-  log "Repo klonlaniyor: ${REPO_URL} -> ${APP_DIR}"
-  mkdir -p "$(dirname "${APP_DIR}")"
-  git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}"
-fi
-
-cd "${APP_DIR}"
-
-# ---------------------------------------------------------------------------
-# 5. .env uretimi (Docker ile ayaga kaldirmadan ONCE)
-# ---------------------------------------------------------------------------
-ENV_FILE="${APP_DIR}/.env"
-if [[ -f "${ENV_FILE}" ]]; then
-  warn ".env zaten mevcut; mevcut sirlar korunuyor. Yeniden uretmek icin once silin."
-else
-  log ".env uretiliyor (rastgele sirlarla)..."
-  POSTGRES_PASSWORD="$(gen_secret)"
-  JWT_SECRET="$(gen_secret)"
-
-  umask 077
-  cat > "${ENV_FILE}" <<EOF
-# Otomatik uretildi: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-API_PORT=${API_PORT}
-NODE_ENV=production
-HOST=0.0.0.0
-PORT=3000
-
-POSTGRES_USER=${POSTGRES_USER}
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-POSTGRES_DB=${POSTGRES_DB}
-
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-
-JWT_SECRET=${JWT_SECRET}
-JWT_ISSUER=${JWT_ISSUER}
-
-IAM_MIGRATIONS_DIR=/app/packages/iam/drizzle
-EOF
-  chmod 600 "${ENV_FILE}"
-  log ".env olusturuldu: ${ENV_FILE} (izinler 600)"
+  log "Docker ag zaten mevcut: ${DOCKER_NETWORK}"
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Docker ile ayaga kaldir (build + migration + api)
+# 4. Imaji cek ve backoffice container'i baslat
 # ---------------------------------------------------------------------------
-log "Docker imajlari build ediliyor ve servisler baslatiliyor..."
-docker compose --project-directory "${APP_DIR}" up -d --build
+log "Backoffice imaji cekiliyor: ${IMAGE}"
+docker pull "${IMAGE}"
 
-log "Servis durumu:"
-docker compose --project-directory "${APP_DIR}" ps
+if docker ps -a --format '{{.Names}}' | grep -Fxq "${CONTAINER_NAME}"; then
+  log "Mevcut '${CONTAINER_NAME}' container'i durduruluyor ve siliniyor..."
+  docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+  docker rm "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+fi
 
+log "Backoffice container'i baslatiliyor..."
+docker run -d \
+  --name "${CONTAINER_NAME}" \
+  --restart unless-stopped \
+  --network "${DOCKER_NETWORK}" \
+  -p "${PORT}:8000" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "${DATA_DIR}:/data" \
+  --label oserp.backoffice.role=control-plane \
+  "${IMAGE}"
+
+log "Container baslatildi:"
+docker ps --filter "name=^/${CONTAINER_NAME}$"
+
+# ---------------------------------------------------------------------------
+# 5. Bilgilendirme
+# ---------------------------------------------------------------------------
+PUBLIC_HINT="$(hostname -I 2>/dev/null | awk '{print $1}')"
 log "Kurulum tamamlandi."
-log "API saglik kontrolu: curl http://localhost:${API_PORT}/health"
+log "Backoffice: http://${PUBLIC_HINT:-<sunucu-ip>}:${PORT}"
+log "Ilk acilista admin sihirbazi sizi karsilayacak."
+warn "GUVENLIK: Backoffice host Docker socket'ine erisir; portu yalnizca"
+warn "  guvenilen aglara (VPN/Tailscale/IP allowlist) acin ya da reverse"
+warn "  proxy arkasinda mTLS/Basic auth ile koruyun."

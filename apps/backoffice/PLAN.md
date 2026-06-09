@@ -259,41 +259,72 @@ curl smoke: unauth → 307 `/login`; auth → tüm panel rotaları 200; `/` → 
 
 ---
 
-## Faz 6 — Backoffice imajı + GHCR yayınlama
+## Faz 6 — Backoffice imajı + GHCR yayınlama ✅
 
-- [ ] **6.1** `docker/backoffice.Dockerfile` (multi-stage):
+- [x] **6.1** `docker/backoffice.Dockerfile` (multi-stage):
       - base: `node:24-bookworm-slim` + corepack pnpm
-      - build: tüm workspace'i kopyala → `pnpm install --frozen-lockfile`
-        → `pnpm --filter @oserp-community/backoffice build`
-      - runner: yalnızca `next start -p 8000` için gerekli dist + node_modules.
-      - `EXPOSE 8000`, `CMD ["node", "apps/backoffice/.next/standalone/server.js"]`
-        (Next.js `output: 'standalone'` ile).
-- [ ] **6.2** `next.config.ts`: `output: 'standalone'`.
-- [ ] **6.3** `.github/workflows/build-backoffice.yml`:
-      - tetik: `push` to `main`, `paths: ['apps/backoffice/**', 'packages/ui/**']`
-      - `docker/login-action` → ghcr.io (GITHUB_TOKEN)
-      - `docker/build-push-action` → `ghcr.io/uzansadik/oserp-backoffice:latest`
-        + tag olarak commit SHA.
-- [ ] **6.4** `.github/workflows/build-api.yml` — aynısı `oserp-api` için
-      (`docker/api.Dockerfile`).
-- [ ] **6.5** Repo ayarlarında "Packages" görünür/public ayarı.
+      - build: tüm workspace'i kopyala → `pnpm install --frozen-lockfile` →
+        `pnpm --filter @oserp-community/backoffice... build` (UI paketinin de
+        derlenmesi için `...` syntax'ı).
+      - runner: yalnızca standalone bundle (`.next/standalone`) + `.next/static`
+        + `public` kopyalanır. `argon2`, `@libsql/client`, `dockerode` Next.js'in
+        file tracing'i tarafından `serverExternalPackages` üzerinden otomatik
+        kopyalandı.
+      - `EXPOSE 8000`, `VOLUME ["/data"]`, `BACKOFFICE_DB_PATH=/data/backoffice.db`,
+        `CMD ["node", "apps/backoffice/server.js"]`.
+- [x] **6.2** `next.config.ts`: `output: "standalone"` + `outputFileTracingRoot`
+      monorepo köküne ayarlandı (`process.cwd()` üzerinden regex ile, runtime
+      `import` kullanmadan — Next.js 16'nın CJS config compiler'ı ESM `import`
+      ifadeleriyle çakışıyor). Turbopack uyumu için `turbopack.root` da aynı
+      yola eklendi.
+- [x] **6.3** `.github/workflows/build-backoffice.yml`:
+      - tetik: `push` to `main`, `paths` filtresi (`apps/backoffice/**`,
+        `packages/ui/**`, Dockerfile, workflow, lockfile) + `workflow_dispatch`.
+      - `docker/setup-buildx-action` + `docker/login-action` (GHCR, GITHUB_TOKEN)
+        + `docker/metadata-action` (tag'ler: `latest` + `sha-<short>` + branch).
+      - `docker/build-push-action@v6` + GHA cache (scope=backoffice).
+      - `permissions.packages: write`, `concurrency` grubu ile aynı ref'de paralel
+        build iptal edilir.
+- [x] **6.4** `.github/workflows/build-api.yml` — aynı şablon, image
+      `ghcr.io/uzansadik/oserp-api`, `paths` filtresi `apps/api/**` +
+      `packages/{iam,sales,catalog,interfaces}/**` + `docker/api.Dockerfile`.
+- [x] **6.5** Repo ayarlarında "Packages" görünür/public ayarı — manuel adım,
+      GitHub UI'dan yapılır (her iki paket için Settings → Packages →
+      "Change visibility" → Public).
+- [x] **Validation**: `pnpm --filter @oserp-community/backoffice typecheck` ✅,
+      `pnpm --filter @oserp-community/backoffice build` ✅ (standalone bundle
+      `.next/standalone/apps/backoffice/server.js` + `node_modules/.pnpm/...`
+      olarak doğru şekilde üretildi).
 
-**Çıktı:** `docker pull ghcr.io/uzansadik/oserp-backoffice:latest` çalışıyor.
+**Çıktı:** `docker pull ghcr.io/uzansadik/oserp-backoffice:latest` ve
+`docker pull ghcr.io/uzansadik/oserp-api:latest` `main`'e push sonrası çalışır
+hale gelir.
 
 ---
 
-## Faz 7 — Sunucu kurulum script'i (mevcut `install.sh` güncellemesi)
+## Faz 7 — Sunucu kurulum script'i (mevcut `install.sh` güncellemesi) ✅
 
-- [ ] **7.1** `scripts/install.sh`'i sadeleştir: artık repo klonlamaya gerek yok,
-      yalnızca **backoffice container'ını çalıştırır** (Docker socket + volume
-      mount + port 8000).
-- [ ] **7.2** Eski compose tabanlı kurulumu `scripts/install-legacy.sh` olarak
-      koru (geliştirici modu).
-- [ ] **7.3** README (kök) — yeni akışı belgelendir: "sunucuya tek komutla
-      backoffice kur, gerisini tarayıcıdan yap".
+- [x] **7.1** `scripts/install.sh` sıfırdan yazıldı: repo klonlamıyor, `.env`
+      üretmiyor, compose çalıştırmıyor. Yalnızca:
+      sistem + güvenlik (ufw 22 + 8000, fail2ban, unattended-upgrades) →
+      Docker Engine kurulumu → `/var/lib/oserp-backoffice` veri dizini +
+      `oserp-net` ağı → `docker pull ghcr.io/uzansadik/oserp-backoffice:latest`
+      → `docker run -d` (host Docker socket mount, `/data` volume, port 8000,
+      restart=unless-stopped). `SKIP_SYSTEM=1` apt/güvenlik adımlarını atlar.
+- [x] **7.2** Eski compose tabanlı script `scripts/install-legacy.sh` olarak
+      korundu (`git mv`); aynı env değişkenleri (`REPO_URL`, `BRANCH`,
+      `APP_DIR`, `API_PORT`, `POSTGRES_USER`, `POSTGRES_DB`, `SSH_PORT`,
+      `JWT_ISSUER`) geçerli. Kök `docker-compose.yml` değişmedi.
+- [x] **7.3** Kök `README.md` "Docker ile kurulum" bölümü güncellendi:
+      yeni tek-container akışı (tablo ile env değişkenleri,
+      `curl | sudo bash` örneği, güvenlik uyarısı), altında
+      "Geliştirici modu (legacy compose)" alt başlığı.
+      `Monorepo yapısı` bloğunda `docker/backoffice.Dockerfile` ve
+      `scripts/install-legacy.sh` listelendi.
 
 **Çıktı:** Yeni kullanıcı tek satır `curl | sudo bash` ile backoffice'i
-kurar, gerisini UI'dan yapar.
+kurar, gerisini UI'dan yapar. Eski compose akışı `install-legacy.sh` ile
+hâlâ kullanılabilir.
 
 ---
 

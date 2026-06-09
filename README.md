@@ -55,10 +55,12 @@ mesaj kuyruğuna geçişi tek bir adaptör değişimiyle mümkün kılar.
 │  ├─ interfaces/       # Paylaşılan arayüzler
 │  └─ shared/           # Paylaşılan db/ui yardımcıları
 ├─ docker/
-│  └─ api.Dockerfile    # API servisi imajı (ileride web/worker eklenecek)
+│  ├─ api.Dockerfile         # API servisi imajı (GHCR'a yayınlanır)
+│  └─ backoffice.Dockerfile  # Backoffice (Next.js) imajı (GHCR'a yayınlanır)
 ├─ scripts/
-│  └─ install.sh        # Ubuntu LTS Docker kurulum script'i
-├─ docker-compose.yml   # db + migrate + api servisleri
+│  ├─ install.sh             # Ubuntu LTS backoffice kurulum script'i (yeni akış)
+│  └─ install-legacy.sh      # Eski compose tabanlı kurulum (geliştirici modu)
+├─ docker-compose.yml        # db + migrate + api (geliştirici/legacy)
 └─ pnpm-workspace.yaml
 ```
 
@@ -122,63 +124,76 @@ curl http://localhost:3000/health
 
 ## Docker ile kurulum (Ubuntu LTS)
 
-Tüm sistemi (PostgreSQL + migration + API) bir Ubuntu LTS sunucuda tek script ile
-ayağa kaldırabilirsiniz. `scripts/install.sh` sırasıyla:
+**Yeni akış (tavsiye edilen):** Sunucuya yalnızca **backoffice** container'ı
+kurulur; PostgreSQL, IAM API ve diğer servisler tarayıcıdan tek tıkla
+ayağa kaldırılır. Repo klonlamanız, `.env` üretmeniz veya `docker compose`
+komutu çalıştırmanız gerekmez.
 
-1. Sistemi günceller (`apt update && upgrade`)
-2. Güvenlik ayarlarını uygular — `ufw` güvenlik duvarı (yalnızca SSH + API portu),
-   `unattended-upgrades` (otomatik güvenlik yamaları) ve `fail2ban`
+`scripts/install.sh` sırasıyla:
+
+1. Sistemi günceller (`apt update && upgrade`) — opsiyonel, `SKIP_SYSTEM=1` ile
+   atlanabilir
+2. `ufw` (SSH + 8000), `unattended-upgrades` ve `fail2ban` ayarlar
 3. Docker Engine + Compose eklentisini resmi depodan kurar
-4. Repoyu klonlar, **rastgele sırlarla** (`JWT_SECRET`, DB parolası) bir `.env`
-   üretir ve `docker compose up -d --build` ile servisleri başlatır
+4. `ghcr.io/uzansadik/oserp-backoffice:latest` imajını çeker, `oserp-net`
+   ağını oluşturur ve backoffice container'ını host Docker socket'i + kalıcı
+   `/var/lib/oserp-backoffice` volume'u + port 8000 ile başlatır
 
 ### Kullanım
 
 Sunucuda root (veya sudo) yetkisiyle:
 
 ```bash
-# Varsayılan repo (https://github.com/uzansadik/oserp.git) ile:
 curl -fsSL https://raw.githubusercontent.com/uzansadik/oserp/main/scripts/install.sh | sudo bash
+```
 
-# veya repoyu klonlayıp:
+Veya repoyu klonlayıp:
+
+```bash
 sudo ./scripts/install.sh
 ```
 
-Farklı bir repo/dal/port için ortam değişkenleriyle özelleştirilebilir:
+Özelleştirme:
 
 ```bash
-sudo REPO_URL=https://github.com/org/repo.git BRANCH=main API_PORT=8080 ./scripts/install.sh
+sudo PORT=8443 DATA_DIR=/srv/oserp ./scripts/install.sh
 ```
 
-| Değişken        | Varsayılan                                | Açıklama                    |
-| --------------- | ----------------------------------------- | --------------------------- |
-| `REPO_URL`      | `https://github.com/uzansadik/oserp.git`  | Klonlanacak repo            |
-| `BRANCH`        | `main`                                    | Klonlanacak dal             |
-| `APP_DIR`       | `/opt/community`                          | Kurulum dizini              |
-| `API_PORT`      | `3000`                                    | Host'ta yayınlanan API portu|
-| `POSTGRES_USER` | `community`                               | Veritabanı kullanıcısı      |
-| `POSTGRES_DB`   | `community`                               | Veritabanı adı              |
-| `SSH_PORT`      | `22`                                      | `ufw`'da izin verilen SSH   |
+| Değişken         | Varsayılan                                       | Açıklama                                  |
+| ---------------- | ------------------------------------------------ | ----------------------------------------- |
+| `IMAGE`          | `ghcr.io/uzansadik/oserp-backoffice:latest`      | Çekilecek backoffice imajı                |
+| `CONTAINER_NAME` | `oserp-backoffice`                               | Container adı                             |
+| `DATA_DIR`       | `/var/lib/oserp-backoffice`                      | SQLite + state için kalıcı host dizini    |
+| `PORT`           | `8000`                                           | Host'ta yayınlanan backoffice portu       |
+| `SSH_PORT`       | `22`                                             | `ufw`'da izin verilen SSH portu           |
+| `DOCKER_NETWORK` | `oserp-net`                                      | Yönetilen servislerin paylaşacağı ağ      |
+| `SKIP_SYSTEM`    | `0`                                              | `1` ise apt/güvenlik adımları atlanır     |
 
-### Compose servisleri
+Kurulum sonrası `http://<sunucu-ip>:8000` adresine gidip ilk açılış admin
+sihirbazını tamamlayın, ardından **Servis Kur** ekranından `iam` (PostgreSQL
++ API + migration) servisini tek tıkla ayağa kaldırın.
 
-`docker-compose.yml` üç servis tanımlar:
+> **Güvenlik:** Backoffice host Docker socket'ine erişir; portu yalnızca
+> güvenilen ağlara (VPN/Tailscale/IP allowlist) açın ya da reverse proxy
+> arkasında mTLS/Basic auth ile koruyun. Public IP'ye açmayın.
 
-- **db** — PostgreSQL 16. Yalnızca dahili Docker ağından erişilir (host'a port
-  açılmaz), kalıcı `pgdata` volume kullanır, `pg_isready` ile sağlık kontrolü yapar.
-- **migrate** — Veritabanı şemasını uygular ve sonlanır. `db` sağlıklı olduğunda
-  bir kez çalışır.
-- **api** — Fastify sunucusu. `db` sağlıklı **ve** `migrate` başarıyla bittikten
-  sonra başlar, `API_PORT` üzerinden yayınlanır.
+### Geliştirici modu (legacy compose)
 
-Manuel compose kullanımı (Docker zaten kuruluysa):
+Backoffice olmadan yalnızca PostgreSQL + API stack'ini doğrudan compose ile
+ayağa kaldırmak için `scripts/install-legacy.sh` ve kök `docker-compose.yml`
+kullanılır. Bu akış repoyu klonlar, `.env` üretir ve `db + migrate + api`
+servislerini build edip başlatır:
 
 ```bash
+sudo ./scripts/install-legacy.sh
+# veya yerel/dev:
 cp .env.docker.example .env   # değerleri düzenleyin
 docker compose up -d --build
-docker compose ps
 docker compose logs -f api
 ```
+
+Legacy script aynı `REPO_URL`, `BRANCH`, `APP_DIR`, `API_PORT`,
+`POSTGRES_USER`, `POSTGRES_DB`, `SSH_PORT` ortam değişkenlerini kabul eder.
 
 ---
 

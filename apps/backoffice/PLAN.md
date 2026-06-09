@@ -125,23 +125,55 @@
 
 ---
 
-## Faz 3 — Docker kontrolü
+## Faz 3 — Docker kontrolü ✅
 
-- [ ] **3.1** `dockerode` ekle. `src/server/docker/client.ts` — `/var/run/docker.sock`
-      üzerinden bağlanır (Windows dev için `npipe` alternatifi env ile).
-- [ ] **3.2** `DockerService` sınıfı:
-      - `pingDaemon(): Promise<boolean>`
-      - `pullImage(image: string, tag: string, onProgress)`
-      - `runContainer(spec)`, `stopContainer(name)`, `removeContainer(name)`
-      - `getContainerStatus(name)`, `streamLogs(name)`
-- [ ] **3.3** `GET /api/docker/status` — daemon erişilebilir mi.
-- [ ] **3.4** `GET /api/services` — `services` tablosu + her birinin
-      `getContainerStatus` sonucu.
-- [ ] **3.5** `POST /api/services/:name/install` — pull + run (aşağıdaki Faz 4
-      ile birleşir).
-- [ ] **3.6** `GET /api/services/:name/logs` — SSE veya WebSocket ile log akışı.
+- [x] **3.1** `dockerode` (+ `@types/dockerode`) eklendi.
+      `server/docker/client.ts` — `DOCKER_HOST` env'ini öncelikle okur
+      (`unix://`, `npipe://`, `tcp://` şemalarını destekler), yoksa Linux'ta
+      `/var/run/docker.sock`, Windows dev'de `//./pipe/docker_engine`'e
+      bağlanır. `globalThis` cache ile tekil instance.
+- [x] **3.2** `DockerService` sınıfı (`server/docker/docker-service.ts`):
+      - `pingDaemon(): Promise<DaemonInfo>` — version + info döner, daemon
+        yoksa graceful `{reachable:false, error}` (throw etmez).
+      - `pullImage(image, tag, onProgress?)` — `modem.followProgress` ile
+        ilerleme yüzdesi raporlar.
+      - `runContainer(spec)` — önce varsa eski container'ı silip yenisini
+        `unless-stopped` restart policy ile başlatır; label'lar:
+        `oserp.backoffice.managed=true`, `oserp.backoffice.service=<name>`.
+      - `stopContainer(name, {ignoreMissing?})`, `removeContainer(name, ...)`,
+        `getContainerStatus(name)` (port binding + state),
+        `ensureNetwork(name)`, `streamLogs(name, {tail, follow})`.
+      - 404 (no such container) ve 304 (already stopped) hataları içeri
+        sindiriliyor.
+- [x] **3.3** `GET /api/docker/status` — admin cookie zorunlu;
+      `pingDaemon()` sonucunu döner (200 reachable, 503 yoksa).
+- [x] **3.4** `GET /api/services` — `services` tablosu + her satır için
+      `getContainerStatus` (paralel `Promise.all`, hata varsa
+      `containerError` alanı).
+- [x] **3.5** `POST /api/services/:name/install` — body'den `image, tag,
+      env, ports, volumes, network` alır; `services` upsert + `installing`
+      durumu, `pullImage` + (varsa) `ensureNetwork` + `runContainer`,
+      başarıda `running` + `lastStartedAt`, hatada `failed`; tüm geçişler
+      `service_events` tablosuna düşer.
+      Ek: `POST /api/services/:name/stop` (graceful stop + event).
+- [x] **3.6** `GET /api/services/:name/logs?tail=&follow=` — SSE
+      (`text/event-stream`). Docker'ın 8 byte multiplex frame header'ını
+      `stripDockerHeader` ile parse edip her satırı `data: ...\n\n` olarak
+      yazar. `request.signal.abort` ile stream destroy edilir.
+- [x] **Auth**: tüm `/api/docker/*` ve `/api/services/*` route'ları
+      handler içinde `getCurrentAdmin()` kontrolü yapar; proxy zaten cookie
+      varlığını zorlar.
+- [x] **next.config.ts**: `serverExternalPackages` listesine `dockerode` ve
+      `argon2` eklendi (native bağımlılıkların Turbopack tarafından
+      bundle'lanmasını engeller).
+- [x] **Validation**: typecheck ✅, build ✅ (15 worker, 4 sayfa). Curl
+      smoke (Docker daemon yok): proxy 307 (unauth) | setup 200 | docker
+      status 503 + `{reachable:false, error:"connect ENOENT ..."}` |
+      services [] 200 | unknown 404 | install missing image 400 | install
+      bad name 400. Tüm validation kuralları çalışıyor.
 
-**Çıktı:** Backoffice host Docker daemon'ını okuyabilir ve yönetebilir.
+**Çıktı:** Backoffice host Docker daemon'ını okuyabilir ve yönetebilir
+(daemon yoksa graceful degradation).
 
 ---
 

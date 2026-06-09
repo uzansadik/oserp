@@ -13,6 +13,7 @@
     "@libsql/client": "^0.15.15",
     "@oserp-community/ui": "workspace:*",
     "argon2": "^0.44.0",
+    "dockerode": "^5.0.0",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.17.0",
     "next": "16.2.6",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/dockerode": "^4.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -4,8 +4,11 @@ packages:
 
 allowBuilds:
   argon2: true
+  cpu-features: false
   esbuild: false
+  protobufjs: false
   sharp: true
+  ssh2: false
   unrs-resolver: true
 
 catalog:

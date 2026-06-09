@@ -229,18 +229,33 @@
 
 
 
-- [ ] **5.1** Layout: sidebar (Servisler, Ayarlar, Çıkış) + topbar.
-- [ ] **5.2** `app/setup/page.tsx` — admin oluşturma sihirbazı (3 adım: hesap,
-      registry onayı, ilk servis seçimi).
-- [ ] **5.3** `app/dashboard/page.tsx` — servis listesi (tablo): durum rozeti,
-      sürüm, port, eylemler (başlat/durdur/güncelle/log).
-- [ ] **5.4** `app/services/:name/page.tsx` — detay: env'ler (maskeli), son
-      olaylar, canlı log akışı.
-- [ ] **5.5** `app/settings/page.tsx` — registry, network, backup.
-- [ ] **5.6** Eylemler için server actions / route handler entegrasyonu, toast
-      ile geri bildirim.
+- [x] **5.1** Layout: sidebar (Genel Bakış, Servis Kur, Servisler, Ayarlar) + topbar
+      (admin email + Çıkış). Route group `(panel)/` üzerinden tek
+      `getCurrentAdmin()` guard.
+- [x] **5.2** `app/setup/page.tsx` zaten Faz 2'de hazır (tek-adımlı). 5.2
+      kapsamında **install sihirbazı** (`app/(panel)/install/page.tsx` +
+      `components/install-wizard.tsx`) eklendi: katalog kartları, bağımlılık
+      zinciri, otomatik üretilen sırlar için placeholder, kurulum sonrası
+      üretilen sırların özetlenmesi.
+- [x] **5.3** `app/(panel)/dashboard/page.tsx` — daemon Alert + 3 stat kart +
+      servis tablosu (durum rozeti, sürüm, portlar, son başlangıç, eylemler).
+      `components/service-status-badge.tsx` + `components/service-actions.tsx`
+      (Detay/Güncelle/Durdur + Dialog).
+- [x] **5.4** `app/(panel)/services/[name]/page.tsx` — Tabs (Env/Olaylar/Logs);
+      `components/env-viewer.tsx` (secret-aware mask + eye toggle);
+      `components/log-stream.tsx` (EventSource → `/api/services/:name/logs`,
+      pause/refresh, 1000 satır tampon).
+- [x] **5.5** `app/(panel)/settings/page.tsx` — oturum, DB yolu, Docker
+      host/network/sürüm bilgisi, çalışma zamanı kartları.
+- [x] **5.6** Tüm aksiyonlar fetch + `router.refresh()` üzerinden çalışıyor
+      (sonner yerine inline Alert/error span — küçük yüzey, daha az bağımlılık).
 
 **Çıktı:** Uçtan uca tıklanabilir backoffice deneyimi.
+**Doğrulama:** `pnpm typecheck` + `pnpm build` temiz (5 yeni ƒ rota:
+`/dashboard`, `/install`, `/services`, `/services/[name]`, `/settings`).
+curl smoke: unauth → 307 `/login`; auth → tüm panel rotaları 200; `/` → 307
+`/dashboard`; bilinmeyen servis → 404 (`notFound()`).
+
 
 ---
 

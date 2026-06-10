@@ -30,6 +30,10 @@
 #   SSH_PORT          (vars: 22)   ufw'da izin verilecek SSH portu
 #   DOCKER_NETWORK    (vars: oserp-net) Yonetilen servislerin paylasacagi ag
 #   SKIP_SYSTEM       (vars: 0)    1 ise apt update/upgrade + guvenlik atlanir
+#   PRIMARY_DOMAIN    (vars: bos)  Set edilirse domain moduna gecer. Ornek:
+#                                  PRIMARY_DOMAIN=backoffice.example.com
+#                                  ACME_EMAIL=admin@example.com
+#   ACME_EMAIL        (vars: bos)  Let's Encrypt bildirim e-postasi
 #
 set -euo pipefail
 
@@ -60,6 +64,14 @@ LEGACY_PORT="${LEGACY_PORT:-8000}"
 SSH_PORT="${SSH_PORT:-22}"
 DOCKER_NETWORK="${DOCKER_NETWORK:-oserp-net}"
 SKIP_SYSTEM="${SKIP_SYSTEM:-0}"
+PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-}"
+ACME_EMAIL="${ACME_EMAIL:-}"
+
+# Mod: domain mi, IP-only mu?
+DOMAIN_MODE="0"
+if [[ -n "${PRIMARY_DOMAIN}" ]]; then
+  DOMAIN_MODE="1"
+fi
 
 # ---------------------------------------------------------------------------
 # 0. On kontroller
@@ -157,26 +169,66 @@ fi
 
 # ---------------------------------------------------------------------------
 # 4a. (Edge modu) Caddy icin baslangic Caddyfile
+#
+# Iki mod:
+#   - DOMAIN_MODE=1 -> PRIMARY_DOMAIN verilmisse ACME/Let's Encrypt ile gercek
+#     sertifika. Caddy HTTP-01 challenge icin 80 portunu kullanir.
+#   - DOMAIN_MODE=0 -> sadece IP. auto_https off + tls internal ile self-signed.
+#     Bu, NAT/domainless kurulumlarda bile calisan tek pattern. Onceki
+#     `tls internal` + auto_https implicit policy carpismasi nedeniyle
+#     ERR_SSL_PROTOCOL_ERROR olusuyordu — `https://:443 { tls internal }`
+#     explicit scheme ile bu duzeltildi.
 # ---------------------------------------------------------------------------
 if [[ "${EDGE_ENABLED}" == "1" ]]; then
   CADDYFILE="${DATA_DIR}/caddy/Caddyfile"
   if [[ ! -f "${CADDYFILE}" ]]; then
-    log "Baslangic Caddyfile yaziliyor: ${CADDYFILE}"
-    cat > "${CADDYFILE}" <<EOF
+    if [[ "${DOMAIN_MODE}" == "1" ]]; then
+      # Domain modu — ACME/Let's Encrypt ile gercek sertifika
+      if [[ -z "${ACME_EMAIL}" ]]; then
+        ACME_EMAIL="admin@${PRIMARY_DOMAIN}"
+        warn "ACME_EMAIL verilmedi; ${ACME_EMAIL} kullanilacak."
+      fi
+      log "Baslangic Caddyfile yaziliyor (DOMAIN modu, ACME): ${CADDYFILE}"
+      cat > "${CADDYFILE}" <<EOF
 {
-  admin 0.0.0.0:2019
+    email ${ACME_EMAIL}
+    admin 0.0.0.0:2019
 }
 
-# Backoffice catchall — IP uzerinden self-signed HTTPS ile hemen erisilir.
+# Birincil backoffice domain'i — ACME HTTP-01 ile otomatik sertifika.
+${PRIMARY_DOMAIN} {
+    reverse_proxy ${CONTAINER_NAME}:8000
+}
+
+# Standart alt-domainler (opsiyonel, gerekli olanlari kaldir):
+# db.${PRIMARY_DOMAIN#*.}    { reverse_proxy postgres:5432 }
+# api.${PRIMARY_DOMAIN#*.}   { reverse_proxy iam:3000 }
+EOF
+    else
+      # IP-only modu — self-signed cert (Caddy internal CA)
+      log "Baslangic Caddyfile yaziliyor (IP modu, self-signed): ${CADDYFILE}"
+      cat > "${CADDYFILE}" <<EOF
+{
+    admin 0.0.0.0:2019
+    auto_https off
+}
+
+# HTTP (80) — dogrudan backoffice'e yonlendir (IP uzerinden gelen istekler).
 :80 {
-  reverse_proxy ${CONTAINER_NAME}:8000
+    bind 0.0.0.0
+    reverse_proxy ${CONTAINER_NAME}:8000
 }
 
-:443 {
-  tls internal
-  reverse_proxy ${CONTAINER_NAME}:8000
+# HTTPS (443) — internal CA ile self-signed cert. Explicit scheme kullanmazsak
+# Caddy IP listener icin TLS policy olusturmuyor ve ERR_SSL_PROTOCOL_ERROR
+# olusuyordu; bu nedenle `https://` prefix'i sart.
+https://:443 {
+    bind 0.0.0.0
+    tls internal
+    reverse_proxy ${CONTAINER_NAME}:8000
 }
 EOF
+    fi
   else
     log "Mevcut Caddyfile korunuyor: ${CADDYFILE}"
   fi
@@ -200,6 +252,13 @@ if [[ "${EDGE_ENABLED}" != "1" ]]; then
   BACKOFFICE_PUBLISH=( -p "${LEGACY_PORT}:8000" )
 fi
 
+# Backoffice env'leri: domain modundaysa PRIMARY_DOMAIN'i gecir ki
+# backoffice kendi ic state'inde (UI'da) dogru origin'i gostersin.
+BACKOFFICE_EXTRA_ENV=()
+if [[ "${DOMAIN_MODE}" == "1" ]]; then
+  BACKOFFICE_EXTRA_ENV+=( -e "BACKOFFICE_PRIMARY_DOMAIN=${PRIMARY_DOMAIN}" )
+fi
+
 docker run -d \
   --name "${CONTAINER_NAME}" \
   --restart unless-stopped \
@@ -208,6 +267,7 @@ docker run -d \
   -e "BACKOFFICE_HOST_DATA_DIR=${DATA_DIR}" \
   -e "BACKOFFICE_CONTAINER_NAME=${CONTAINER_NAME}" \
   -e "EDGE_ENABLED=${EDGE_ENABLED}" \
+  "${BACKOFFICE_EXTRA_ENV[@]}" \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${DATA_DIR}:/data" \
   --label oserp.backoffice.role=control-plane \
@@ -249,11 +309,20 @@ docker ps --filter "name=^/${CONTAINER_NAME}$" --filter "name=^/${EDGE_CONTAINER
 PUBLIC_HINT="$(hostname -I 2>/dev/null | awk '{print $1}')"
 log "Kurulum tamamlandi."
 if [[ "${EDGE_ENABLED}" == "1" ]]; then
-  log "Backoffice: https://${PUBLIC_HINT:-<sunucu-ip>}  (self-signed sertifika)"
-  log "Domain baglamak icin panele girip 'Etki Alanlari' bolumunden ekleyin."
-  warn "Self-signed sertifikada tarayici uyarisi gelir; gercek bir domain"
-  warn "  baglayinca Let's Encrypt'e gecebilirsiniz."
+  if [[ "${DOMAIN_MODE}" == "1" ]]; then
+    log "Mod: DOMAIN (ACME / Let's Encrypt)"
+    log "Backoffice: https://${PRIMARY_DOMAIN}"
+    log "ACME e-posta: ${ACME_EMAIL}"
+    log "Not: Ilk ACME HTTP-01 challenge icin 80 portu acik olmali."
+  else
+    log "Mod: IP-ONLY (self-signed)"
+    log "Backoffice: http://${PUBLIC_HINT:-<sunucu-ip>}"
+    log "Backoffice (HTTPS, self-signed): https://${PUBLIC_HINT:-<sunucu-ip>}"
+    warn "Self-signed sertifikada tarayici uyarisi gelir; gercek bir domain"
+    warn "  baglamak icin PRIMARY_DOMAIN=... ACME_EMAIL=... ile yeniden calistirin."
+  fi
 else
+  log "Mod: LEGACY (Caddy yok)"
   log "Backoffice: http://${PUBLIC_HINT:-<sunucu-ip>}:${LEGACY_PORT}"
 fi
 log "Ilk acilista admin sihirbazi sizi karsilayacak."

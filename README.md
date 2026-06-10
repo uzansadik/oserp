@@ -156,7 +156,11 @@ sudo ./scripts/install.sh
 Özelleştirme:
 
 ```bash
-sudo PORT=8443 DATA_DIR=/srv/oserp ./scripts/install.sh
+# Domain modu (ACME/Let's Encrypt ile gercek sertifika)
+sudo PRIMARY_DOMAIN=backoffice.example.com ACME_EMAIL=admin@example.com ./scripts/install.sh
+
+# Sadece IP kurulumu (self-signed cert)
+sudo ./scripts/install.sh
 ```
 
 | Değişken         | Varsayılan                                       | Açıklama                                  |
@@ -164,14 +168,24 @@ sudo PORT=8443 DATA_DIR=/srv/oserp ./scripts/install.sh
 | `IMAGE`          | `ghcr.io/uzansadik/oserp-backoffice:latest`      | Çekilecek backoffice imajı                |
 | `CONTAINER_NAME` | `oserp-backoffice`                               | Container adı                             |
 | `DATA_DIR`       | `/var/lib/oserp-backoffice`                      | SQLite + state için kalıcı host dizini    |
-| `PORT`           | `8000`                                           | Host'ta yayınlanan backoffice portu       |
+| `EDGE_ENABLED`   | `1`                                              | `0` ise Caddy kurulmaz, backoffice doğrudan host portuna açılır |
+| `LEGACY_PORT`    | `8000`                                           | `EDGE_ENABLED=0` iken host portu         |
+| `PRIMARY_DOMAIN` | _(boş)_                                          | Set edilirse domain moduna geçer (ACME/Let's Encrypt). Örn. `backoffice.example.com` |
+| `ACME_EMAIL`     | `admin@${PRIMARY_DOMAIN}`                        | Let's Encrypt bildirim e-postası          |
 | `SSH_PORT`       | `22`                                             | `ufw`'da izin verilen SSH portu           |
 | `DOCKER_NETWORK` | `oserp-net`                                      | Yönetilen servislerin paylaşacağı ağ      |
 | `SKIP_SYSTEM`    | `0`                                              | `1` ise apt/güvenlik adımları atlanır     |
 
-Kurulum sonrası `http://<sunucu-ip>:8000` adresine gidip ilk açılış admin
-sihirbazını tamamlayın, ardından **Servis Kur** ekranından `iam` (PostgreSQL
-+ API + migration) servisini tek tıkla ayağa kaldırın.
+**Modlar:**
+
+- `PRIMARY_DOMAIN` boş → **IP-only** modu. HTTP 80 ve HTTPS 443 (self-signed, `tls internal`).
+  `https://<sunucu-ip>` adresinde tarayıcı sertifika uyarısı verir; **"Advanced → Proceed"** ile geçilebilir.
+- `PRIMARY_DOMAIN` set → **Domain** modu. Caddy ACME HTTP-01 ile otomatik sertifika alır
+  (80 portu açık olmalı). `https://${PRIMARY_DOMAIN}` üzerinden uyarısız erişim.
+
+Kurulum sonrası ilgili adrese gidip ilk açılış admin sihirbazını tamamlayın,
+ardından **Servis Kur** ekranından `iam` (PostgreSQL + API + migration) servisini
+tek tıkla ayağa kaldırın.
 
 > **Güvenlik:** Backoffice host Docker socket'ine erişir; portu yalnızca
 > güvenilen ağlara (VPN/Tailscale/IP allowlist) açın ya da reverse proxy

@@ -19,6 +19,21 @@ describe('PermissionEvaluator', () => {
     expect(ev.hasCode('iam.user.delete')).toBe(true);
   });
 
+  it('tek basina * (wildcard permission) her seyi kapsar', () => {
+    const ev = new PermissionEvaluator(['*']);
+    expect(ev.hasCode('iam.user.create')).toBe(true);
+    expect(ev.hasCode('sales.invoice.read')).toBe(true);
+    expect(ev.hasCode('catalog.product.delete')).toBe(true);
+  });
+
+  it('wildcard henuz tanimlanmamis permissionlari da kapsar', () => {
+    // Yeni bir context (sales) eklenip icine yeni bir permission kondugunda,
+    // sistem kullanicisi (granted=['*']) bunu da otomatik alir — bu test
+    // invariant'i korur: hasCode herhangi bir required string icin true.
+    const ev = new PermissionEvaluator(['*']);
+    expect(ev.hasCode('finance.ledger.close')).toBe(true);
+  });
+
   it('eslesmeyen izin false doner', () => {
     const ev = new PermissionEvaluator(['catalog.product.read']);
     expect(ev.hasCode('iam.user.delete')).toBe(false);

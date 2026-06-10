@@ -20,6 +20,7 @@ export class PermissionAction {
     'open',
     'archive',
     'restore',
+    '*',
   ]);
 
   private constructor(private readonly value: string) {}

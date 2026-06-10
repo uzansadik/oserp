@@ -16,7 +16,7 @@ export class PermissionResource {
       throw new Error('Permission resource is too long');
     }
 
-    if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
+    if (!/^[a-z][a-z0-9_]*$/.test(normalized) && normalized !== '*') {
       throw new Error(
         'Permission resource must start with a letter and contain only lowercase letters, numbers or underscore',
       );

@@ -116,6 +116,9 @@ export function createIamContainer(config: IamContainerConfig) {
   const permissions = new DrizzlePermissionRepository(db);
   const memberships = new DrizzleMembershipRepository(db);
 
+  // --- Query handler'lar (önce oluşturulmalı; command handler'lar kullanıyor) ---
+  const getEffectivePermissions = new GetEffectivePermissionsHandler(memberships, roles);
+
   const authConfig =
     config.refreshTokenTtlMs !== undefined ? { refreshTokenTtlMs: config.refreshTokenTtlMs } : {};
 
@@ -145,6 +148,7 @@ export function createIamContainer(config: IamContainerConfig) {
       refreshTokenHasher,
       tokenService,
       clock,
+      getEffectivePermissions,
       authConfig,
     ),
     refreshSession: new RefreshSessionHandler(
@@ -152,6 +156,7 @@ export function createIamContainer(config: IamContainerConfig) {
       refreshTokenHasher,
       tokenService,
       clock,
+      getEffectivePermissions,
       authConfig,
     ),
     logout: new LogoutHandler(uow, refreshTokenHasher),
@@ -161,8 +166,7 @@ export function createIamContainer(config: IamContainerConfig) {
     revokeApiCredential: new RevokeApiCredentialHandler(uow),
   } as const;
 
-  // --- Query handler'lar ---
-  const getEffectivePermissions = new GetEffectivePermissionsHandler(memberships, roles);
+  // --- Query handler'lar (queries objesi) ---
   const queries = {
     getUserById: new GetUserByIdHandler(users),
     getUserByEmail: new GetUserByEmailHandler(users),

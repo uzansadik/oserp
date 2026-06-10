@@ -10,7 +10,8 @@ import {
   type RefreshSessionCommand,
   refreshSessionSchema,
 } from '../commands/AuthCommands';
-import type { CommandHandler } from '../Handler';
+import type { CommandHandler, QueryHandler } from '../Handler';
+import type { GetEffectivePermissionsHandler } from './RoleQueryHandlers';
 import type { ClockPort } from '../ports/ClockPort';
 import type { PasswordHasherPort } from '../ports/PasswordHasherPort';
 import type { RefreshTokenHasherPort } from '../ports/RefreshTokenHasherPort';
@@ -24,6 +25,19 @@ export type AuthHandlerConfig = {
 
 const DEFAULT_REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Login sırasında JWT'e yazılacak permission'ları hesaplamak için kullanılan
+ * query handler. Membership → rol → permissionCodes zincirini çözer.
+ *
+ * Container tarafından inject edilir; handler'ın transaction'ın dışında
+ * çalışması gerekir (authenticate middleware'i token'ı doğruladıktan sonra
+ * kullanır), bu yüzden uow dışı sorgu yapar.
+ */
+export type EffectivePermissionsProvider = Pick<
+  GetEffectivePermissionsHandler,
+  'execute'
+>;
+
 export class LoginHandler implements CommandHandler<LoginCommand, AuthTokens> {
   private readonly refreshTtlMs: number;
 
@@ -33,6 +47,7 @@ export class LoginHandler implements CommandHandler<LoginCommand, AuthTokens> {
     private readonly refreshTokenHasher: RefreshTokenHasherPort,
     private readonly tokenService: TokenServicePort,
     private readonly clock: ClockPort,
+    private readonly getEffectivePermissions: EffectivePermissionsProvider,
     config: AuthHandlerConfig = {},
   ) {
     this.refreshTtlMs = config.refreshTokenTtlMs ?? DEFAULT_REFRESH_TTL_MS;
@@ -42,7 +57,9 @@ export class LoginHandler implements CommandHandler<LoginCommand, AuthTokens> {
     const command = loginSchema.parse(input);
     const email = Email.create(command.email);
 
-    return this.uow.execute(async (ctx) => {
+    // Tx içinde: user doğrula, credential kontrol et, session oluştur, raw token üret.
+    // Membership'ten companyId'yi tx içinde oku (db zaten açık).
+    const result = await this.uow.execute(async (ctx) => {
       const user = await ctx.users.findByEmail(email);
       if (!user) {
         throw new Error('Invalid credentials');
@@ -64,6 +81,11 @@ export class LoginHandler implements CommandHandler<LoginCommand, AuthTokens> {
         throw new Error('Invalid credentials');
       }
 
+      // Aktif membership'in companyId'sini bul; yoksa token boş permissions taşır.
+      const memberships = await ctx.memberships.findByUser(user.id);
+      const activeMembership = memberships.find((m) => m.getStatus() === 'active') ?? null;
+      const companyId = activeMembership ? activeMembership.getCompanyId().toString() : null;
+
       const now = this.clock.now();
       const rawRefreshToken = RefreshToken.generate();
       const refreshTokenHash = await this.refreshTokenHasher.hash(rawRefreshToken.getValue());
@@ -75,19 +97,47 @@ export class LoginHandler implements CommandHandler<LoginCommand, AuthTokens> {
         expiresAt,
       });
 
-      const accessToken = await this.tokenService.signAccessToken({ sub: user.id.toString() });
-
       await ctx.sessions.save(session);
       await ctx.outbox.enqueue(session.getDomainEvents());
       session.clearDomainEvents();
 
       return {
-        accessToken,
+        userId: user.id.toString(),
+        companyId,
         refreshToken: rawRefreshToken.getValue(),
         sessionId: session.getId().toString(),
         expiresAt,
       };
     });
+
+    // Tx dışında: effective permissions hesapla, JWT'i imzala.
+    // Hata olursa boş array düşer; token hâlâ geçerli, sadece auth check'leri
+    // başarısız olur — login'i kırmamak için tasarım.
+    let permissions: string[] = [];
+    if (result.companyId) {
+      try {
+        const perms = await this.getEffectivePermissions.execute({
+          userId: result.userId,
+          companyId: result.companyId,
+        });
+        permissions = perms.permissionCodes;
+      } catch {
+        permissions = [];
+      }
+    }
+
+    const accessToken = await this.tokenService.signAccessToken({
+      sub: result.userId,
+      ...(result.companyId ? { companyId: result.companyId } : {}),
+      permissions,
+    });
+
+    return {
+      accessToken,
+      refreshToken: result.refreshToken,
+      sessionId: result.sessionId,
+      expiresAt: result.expiresAt,
+    };
   }
 }
 
@@ -99,6 +149,7 @@ export class RefreshSessionHandler implements CommandHandler<RefreshSessionComma
     private readonly refreshTokenHasher: RefreshTokenHasherPort,
     private readonly tokenService: TokenServicePort,
     private readonly clock: ClockPort,
+    private readonly getEffectivePermissions: EffectivePermissionsProvider,
     config: AuthHandlerConfig = {},
   ) {
     this.refreshTtlMs = config.refreshTokenTtlMs ?? DEFAULT_REFRESH_TTL_MS;
@@ -107,7 +158,7 @@ export class RefreshSessionHandler implements CommandHandler<RefreshSessionComma
   async execute(input: RefreshSessionCommand): Promise<AuthTokens> {
     const command = refreshSessionSchema.parse(input);
 
-    return this.uow.execute(async (ctx) => {
+    const result = await this.uow.execute(async (ctx) => {
       const presentedHash = await this.refreshTokenHasher.hash(command.refreshToken);
       const session = await ctx.sessions.findByRefreshTokenHash(presentedHash);
       if (!session) {
@@ -125,21 +176,49 @@ export class RefreshSessionHandler implements CommandHandler<RefreshSessionComma
 
       session.refresh(newRefreshTokenHash, expiresAt, now);
 
-      const accessToken = await this.tokenService.signAccessToken({
-        sub: session.getUserId().toString(),
-      });
-
       await ctx.sessions.save(session);
       await ctx.outbox.enqueue(session.getDomainEvents());
       session.clearDomainEvents();
 
+      // Refresh sırasında da aktif membership'i bul (login'deki ile aynı mantık).
+      const memberships = await ctx.memberships.findByUser(session.getUserId());
+      const activeMembership = memberships.find((m) => m.getStatus() === 'active') ?? null;
+      const companyId = activeMembership ? activeMembership.getCompanyId().toString() : null;
+
       return {
-        accessToken,
+        userId: session.getUserId().toString(),
+        companyId,
         refreshToken: rawRefreshToken.getValue(),
         sessionId: session.getId().toString(),
         expiresAt,
       };
     });
+
+    let permissions: string[] = [];
+    if (result.companyId) {
+      try {
+        const perms = await this.getEffectivePermissions.execute({
+          userId: result.userId,
+          companyId: result.companyId,
+        });
+        permissions = perms.permissionCodes;
+      } catch {
+        permissions = [];
+      }
+    }
+
+    const accessToken = await this.tokenService.signAccessToken({
+      sub: result.userId,
+      ...(result.companyId ? { companyId: result.companyId } : {}),
+      permissions,
+    });
+
+    return {
+      accessToken,
+      refreshToken: result.refreshToken,
+      sessionId: result.sessionId,
+      expiresAt: result.expiresAt,
+    };
   }
 }
 

@@ -29,6 +29,7 @@ import {
   ListRolesHandler,
 } from '@oserp-community/iam/application/handlers/RoleQueryHandlers';
 import {
+  BootstrapRegisterUserHandler,
   ChangePasswordHandler,
   ChangeUserStatusHandler,
   RegisterUserHandler,
@@ -88,6 +89,7 @@ export function buildTestContainer(): { container: IamContainer; uow: InMemoryUn
       tokenService,
       clock,
       getEffectivePermissions,
+      {},
     ),
     refreshSession: new RefreshSessionHandler(
       uow,
@@ -95,11 +97,15 @@ export function buildTestContainer(): { container: IamContainer; uow: InMemoryUn
       tokenService,
       clock,
       getEffectivePermissions,
+      {},
     ),
     logout: new LogoutHandler(uow, refreshTokenHasher),
     issueApiCredential: new IssueApiCredentialHandler(uow, apiKeySecretHasher),
     rotateApiCredential: new RotateApiCredentialHandler(uow, apiKeySecretHasher),
     revokeApiCredential: new RevokeApiCredentialHandler(uow),
+    bootstrapRegisterUser: new BootstrapRegisterUserHandler(uow, passwordHasher, {
+      defaultCompanyId: '00000000-0000-4000-8000-000000000001',
+    }),
   };
 
   const queries = {

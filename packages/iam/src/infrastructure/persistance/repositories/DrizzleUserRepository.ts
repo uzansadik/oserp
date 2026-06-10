@@ -3,7 +3,7 @@ import type { User } from '@oserp-community/iam/domain/entities/User';
 import type { Email } from '@oserp-community/iam/domain/value-objects/Email';
 import type { UserId } from '@oserp-community/iam/domain/value-objects/UserId';
 import type { Username } from '@oserp-community/iam/domain/value-objects/Username';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import type { IamDbClient } from '../db';
 import { userToDomain, userToPersistence } from '../mappers/UserMapper';
 import { iamUsers } from '../schemas/iam.user.schema';
@@ -57,6 +57,11 @@ export class DrizzleUserRepository implements UserRepositoryPort {
 
   async existsByUsername(username: Username): Promise<boolean> {
     return (await this.findByUsername(username)) !== null;
+  }
+
+  async count(): Promise<number> {
+    const [row] = await this.db.select({ value: count() }).from(iamUsers);
+    return row?.value ?? 0;
   }
 
   async findAll(): Promise<User[]> {

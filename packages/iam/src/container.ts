@@ -29,6 +29,8 @@ import {
   ListRolesHandler,
 } from './application/handlers/RoleQueryHandlers';
 import {
+  type BootstrapConfig,
+  BootstrapRegisterUserHandler,
   ChangePasswordHandler,
   ChangeUserStatusHandler,
   RegisterUserHandler,
@@ -72,6 +74,12 @@ export type IamContainerConfig = {
   jwtIssuer?: string;
   /** Refresh token TTL (ms). Varsayılan 30 gün. */
   refreshTokenTtlMs?: number;
+  /**
+   * Bootstrap konfigürasyonu (ilk sistem kullanıcısı seed).
+   * Verilmezse `defaultCompanyId` ortam değişkeni `IAM_BOOTSTRAP_COMPANY_ID`
+   * ya da sabit bir placeholder UUID kullanılır.
+   */
+  bootstrap?: BootstrapConfig;
   /** İsteğe bağlı port override'ları (test/özelleştirme için). */
   overrides?: Partial<{
     passwordHasher: PasswordHasherPort;
@@ -122,6 +130,17 @@ export function createIamContainer(config: IamContainerConfig) {
   const authConfig =
     config.refreshTokenTtlMs !== undefined ? { refreshTokenTtlMs: config.refreshTokenTtlMs } : {};
 
+  // --- Bootstrap config (env'den okunur) ---
+  // UUID v4 placeholder (CompanyId validator sadece v4 kabul ediyor). Gercek
+  // bir `iam_companies` tablosu eklenince bu seed migrate edilebilir.
+  const PLACEHOLDER_COMPANY_ID = '00000000-0000-4000-8000-000000000001';
+  const bootstrapConfig: BootstrapConfig = {
+    defaultCompanyId:
+      config.bootstrap?.defaultCompanyId ??
+      process.env.IAM_BOOTSTRAP_COMPANY_ID ??
+      PLACEHOLDER_COMPANY_ID,
+  };
+
   // --- Command handler'lar ---
   const commands = {
     registerUser: new RegisterUserHandler(uow, passwordHasher),
@@ -164,6 +183,8 @@ export function createIamContainer(config: IamContainerConfig) {
     issueApiCredential: new IssueApiCredentialHandler(uow, apiKeySecretHasher),
     rotateApiCredential: new RotateApiCredentialHandler(uow, apiKeySecretHasher),
     revokeApiCredential: new RevokeApiCredentialHandler(uow),
+
+    bootstrapRegisterUser: new BootstrapRegisterUserHandler(uow, passwordHasher, bootstrapConfig),
   } as const;
 
   // --- Query handler'lar (queries objesi) ---

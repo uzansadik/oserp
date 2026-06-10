@@ -14,6 +14,18 @@ export function createUserController(container: IamContainer) {
       return { statusCode: 201, body: result };
     },
 
+    /**
+     * Sistem bootstrap: auth-free, sadece bos DB iken calisir. Backoffice IAM'i
+     * kurarken cagirir; sonuc 201 + { userId, membershipId, permissionCode }.
+     *
+     * Hata durumunda controller exception firlatir; Fastify errorHandler 409'a
+     * map eder (BootstrapNotAllowedError).
+     */
+    async bootstrap(input: RegisterUserCommand): Promise<ControllerResult> {
+      const result = await container.commands.bootstrapRegisterUser.execute(input);
+      return { statusCode: 201, body: result };
+    },
+
     async changePassword(input: ChangePasswordCommand): Promise<ControllerResult> {
       await container.commands.changePassword.execute(input);
       return { statusCode: 204, body: null };

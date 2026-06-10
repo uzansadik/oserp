@@ -8,11 +8,11 @@ export class PermissionResource {
       throw new Error('Permission resource cannot be empty');
     }
 
-    if (normalized.length < 2) {
+    if (normalized !== '*' && normalized.length < 2) {
       throw new Error('Permission resource is too short');
     }
 
-    if (normalized.length > 80) {
+    if (normalized !== '*' && normalized.length > 80) {
       throw new Error('Permission resource is too long');
     }
 

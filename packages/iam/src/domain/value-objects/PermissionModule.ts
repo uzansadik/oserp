@@ -8,11 +8,11 @@ export class PermissionModule {
       throw new Error('Permission module cannot be empty');
     }
 
-    if (normalized.length < 2) {
+    if (normalized !== '*' && normalized.length < 2) {
       throw new Error('Permission module is too short');
     }
 
-    if (normalized.length > 50) {
+    if (normalized !== '*' && normalized.length > 50) {
       throw new Error('Permission module is too long');
     }
 

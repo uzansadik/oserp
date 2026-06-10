@@ -51,6 +51,42 @@ require_root() {
   fi
 }
 
+# TTY/interaktif mi? (curl|bash pattern'inde false doner)
+is_interactive() {
+  [[ -t 0 && -t 1 ]]
+}
+
+# Kullanicidan deger sor; girilmezse default kullan, bos da olabilir.
+# $1=mesaj, $2=default, $3=zorunlu mu (0/1)
+prompt() {
+  local msg="$1"
+  local default="${2:-}"
+  local required="${3:-0}"
+  local reply=""
+
+  if ! is_interactive; then
+    # Non-interaktif (curl|bash): soru soramayiz, default'u kullan.
+    echo "${default}"
+    return 0
+  fi
+
+  while true; do
+    if [[ -n "${default}" ]]; then
+      read -r -p "$(printf '\033[1;36m[?]\033[0m %s [%s]: ' "${msg}" "${default}")" reply
+      reply="${reply:-${default}}"
+    else
+      read -r -p "$(printf '\033[1;36m[?]\033[0m %s: ' "${msg}")" reply
+    fi
+
+    if [[ "${required}" == "1" && -z "${reply}" ]]; then
+      warn "Bu alan bos olamaz."
+      continue
+    fi
+    echo "${reply}"
+    return 0
+  done
+}
+
 # ---------------------------------------------------------------------------
 # Yapilandirma
 # ---------------------------------------------------------------------------
@@ -66,6 +102,39 @@ DOCKER_NETWORK="${DOCKER_NETWORK:-oserp-net}"
 SKIP_SYSTEM="${SKIP_SYSTEM:-0}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-}"
 ACME_EMAIL="${ACME_EMAIL:-}"
+
+# ---------------------------------------------------------------------------
+# 0.5. Etkilesimli kurulum (sadece TTY varsa; curl|bash sessizce default'u alir)
+# ---------------------------------------------------------------------------
+if is_interactive; then
+  log "Oserp Community Backoffice kurulum sihirbazi"
+  echo ""
+  echo "Bu script Ubuntu LTS uzerinde backoffice + Caddy edge reverse-proxy"
+  echo "container'larini ayaga kaldirir. Iki moddan birini secebilirsiniz:"
+  echo ""
+  echo "  1) DOMAIN modu — gercek SSL sertifikasi (ACME / Let's Encrypt)"
+  echo "     -> Bir alan adiniz (ornek: panel.firma.com) ve DNS A kaydi lazim."
+  echo "  2) IP-ONLY  modu — sadece sunucu IP'si, self-signed cert"
+  echo "     -> Tarayici uyari verir; test/ic ag icin uygundur."
+  echo ""
+  REPLY=""
+  read -r -p "$(printf '\033[1;36m[?]\033[0m Mod secimi [1=DOMAIN, 2=IP-ONLY, enter=2]: ')"
+  if [[ "${REPLY}" == "1" ]]; then
+    PRIMARY_DOMAIN="$(prompt 'Backoffice icin kullanacaginiz hostname (ornek: panel.firma.com)' '' 1)"
+    ACME_EMAIL="$(prompt "Let's Encrypt bildirim e-postasi (ornek: admin@firma.com)" "admin@${PRIMARY_DOMAIN}" 0)"
+  else
+    log "IP-ONLY modu secildi. Sertifika uyarisiyla devam edilecek."
+  fi
+  echo ""
+
+  SSH_PORT="$(prompt 'SSH portu (ufw kurali icin)' "${SSH_PORT}" 0)"
+  EDGE_ENABLED="$(prompt 'Edge (Caddy) kurulsun mu? [1=evet, 0=hayir]' "${EDGE_ENABLED}" 0)"
+  if [[ "${EDGE_ENABLED}" == "0" ]]; then
+    LEGACY_PORT="$(prompt 'Backoffice host portu (EDGE_ENABLED=0 iken)' "${LEGACY_PORT}" 0)"
+  fi
+  SKIP_SYSTEM="$(prompt 'Sistem guncellemesi (apt/ufw) yapilsin mi? [0=evet, 1=atla]' "${SKIP_SYSTEM}" 0)"
+  echo ""
+fi
 
 # Mod: domain mi, IP-only mu?
 DOMAIN_MODE="0"

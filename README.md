@@ -143,6 +143,21 @@ komutu çalıştırmanız gerekmez.
 
 Sunucuda root (veya sudo) yetkisiyle:
 
+**Etkileşimli (önerilen — script sizi yönlendirir):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/uzansadik/oserp/main/scripts/install.sh -o install.sh
+sudo bash install.sh
+```
+
+Script sırayla soracak:
+- Mod seçimi (1=Domain/ACME, 2=IP-only) — varsayılan: 2
+- Domain adı (domain modunda zorunlu) — örn. `panel.firma.com`
+- ACME e-posta (Let's Encrypt bildirimleri için)
+- SSH portu, edge kurulumu, sistem güncellemesi tercihleri (hepsinde Enter'a basıp varsayılanı alabilirsiniz)
+
+**Sessiz / non-interaktif (otomasyon, CI, kopyala-yapıştır):**
+
 ```bash
 # IP-only (self-signed) — domain gerektirmez
 curl -fsSL https://raw.githubusercontent.com/uzansadik/oserp/main/scripts/install.sh | sudo bash
@@ -158,15 +173,19 @@ Veya repoyu klonlayıp:
 git clone https://github.com/uzansadik/oserp.git
 cd oserp
 
-# IP-only
+# Etkileşimli
 sudo ./scripts/install.sh
 
-# Domain modu
+# Sessiz — IP-only
+sudo ./scripts/install.sh
+
+# Sessiz — Domain modu
 sudo PRIMARY_DOMAIN=panel.firma.com ACME_EMAIL=admin@firma.com ./scripts/install.sh
 ```
 
-> `bash -s --` kullanmak pipe üzerinden sudo yetkisiyle çalıştırmanın en güvenli
-> yoludur; komut argümanları doğrudan shell'e geçer, dosya önce indirilir.
+> **Not:** `curl | sudo bash` pattern'inde script interaktif soru soramaz (stdin
+> piped bash'e gidiyor); bu yüzden ya `bash -s -- ENV=değer` ile non-interaktif
+> çağırın ya da önce indirip `sudo bash install.sh` ile çalıştırın.
 
 | Değişken         | Varsayılan                                       | Açıklama                                  |
 | ---------------- | ------------------------------------------------ | ----------------------------------------- |

@@ -1,14 +1,13 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useMemo, useState, type FormEvent } from 'react';
-
 import { Alert, AlertDescription, AlertTitle } from '@oserp-community/ui/components/alert';
 import { Badge } from '@oserp-community/ui/components/badge';
 import { Button } from '@oserp-community/ui/components/button';
 import { Input } from '@oserp-community/ui/components/input';
 import { Label } from '@oserp-community/ui/components/label';
 import { Separator } from '@oserp-community/ui/components/separator';
+import { useRouter } from 'next/navigation';
+import { type FormEvent, useMemo, useState } from 'react';
 
 export type CatalogEntryView = {
   name: string;
@@ -56,7 +55,7 @@ export function InstallWizard({ entries }: Props) {
     return map;
   }, [entries]);
 
-  const selectedEntry = selected ? entriesByName.get(selected) ?? null : null;
+  const selectedEntry = selected ? (entriesByName.get(selected) ?? null) : null;
 
   const installChain = useMemo(() => {
     if (!selectedEntry) return [] as CatalogEntryView[];
@@ -138,9 +137,7 @@ export function InstallWizard({ entries }: Props) {
                   setError(null);
                 }}
                 className={`group w-full rounded-md border p-3 text-left transition-colors ${
-                  active
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:bg-muted/40'
+                  active ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -149,9 +146,7 @@ export function InstallWizard({ entries }: Props) {
                     {entry.name}
                   </Badge>
                 </div>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  {entry.description}
-                </p>
+                <p className="text-muted-foreground mt-1 text-xs">{entry.description}</p>
                 {entry.dependsOn.length > 0 ? (
                   <p className="text-muted-foreground mt-2 text-[11px]">
                     Gereken: {entry.dependsOn.join(', ')}
@@ -192,9 +187,7 @@ export function InstallWizard({ entries }: Props) {
 
             <p className="text-muted-foreground text-xs">
               Kurulum sırası:{' '}
-              <span className="font-mono">
-                {installChain.map((e) => e.name).join(' → ')}
-              </span>
+              <span className="font-mono">{installChain.map((e) => e.name).join(' → ')}</span>
             </p>
 
             <div className="flex flex-col gap-6">
@@ -206,13 +199,13 @@ export function InstallWizard({ entries }: Props) {
                       <p className="text-muted-foreground text-xs font-mono">{entry.name}</p>
                     </div>
                     {entry.name !== selectedEntry.name ? (
-                      <Badge variant="secondary" className="text-[10px]">bağımlılık</Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        bağımlılık
+                      </Badge>
                     ) : null}
                   </header>
                   {entry.envSpec.length === 0 ? (
-                    <p className="text-muted-foreground text-xs">
-                      Bu servis için ayar gerekmez.
-                    </p>
+                    <p className="text-muted-foreground text-xs">Bu servis için ayar gerekmez.</p>
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2">
                       {entry.envSpec.map((field) => {
@@ -223,10 +216,14 @@ export function InstallWizard({ entries }: Props) {
                             <Label htmlFor={id} className="flex items-center gap-2">
                               <span className="font-mono">{field.key}</span>
                               {field.generated ? (
-                                <Badge variant="outline" className="text-[10px]">otomatik</Badge>
+                                <Badge variant="outline" className="text-[10px]">
+                                  otomatik
+                                </Badge>
                               ) : null}
                               {field.optional ? (
-                                <Badge variant="outline" className="text-[10px]">ops.</Badge>
+                                <Badge variant="outline" className="text-[10px]">
+                                  ops.
+                                </Badge>
                               ) : null}
                             </Label>
                             <Input
@@ -235,11 +232,9 @@ export function InstallWizard({ entries }: Props) {
                               placeholder={
                                 field.generated
                                   ? 'Boş bırak → otomatik üretilir'
-                                  : field.default ?? ''
+                                  : (field.default ?? '')
                               }
-                              onChange={(e) =>
-                                setEnvField(entry.name, field.key, e.target.value)
-                              }
+                              onChange={(e) => setEnvField(entry.name, field.key, e.target.value)}
                             />
                             {field.description ? (
                               <p className="text-muted-foreground text-xs">{field.description}</p>
@@ -272,16 +267,14 @@ export function InstallWizard({ entries }: Props) {
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{r.name}</span>
                           {r.generated.length > 0 ? (
-                            <Badge variant="secondary">
-                              {r.generated.length} sır üretildi
-                            </Badge>
+                            <Badge variant="secondary">{r.generated.length} sır üretildi</Badge>
                           ) : null}
                         </div>
                         {r.generated.length > 0 ? (
                           <p className="text-muted-foreground mt-1 text-xs">
-                            Üretilen: <span className="font-mono">{r.generated.join(', ')}</span>{' '}
-                            — bu değerler güvenli olarak DB'de saklandı, detay sayfasında
-                            maskeli olarak gösterilir.
+                            Üretilen: <span className="font-mono">{r.generated.join(', ')}</span> —
+                            bu değerler güvenli olarak DB'de saklandı, detay sayfasında maskeli
+                            olarak gösterilir.
                           </p>
                         ) : null}
                         {r.postInstall.length > 0 ? (

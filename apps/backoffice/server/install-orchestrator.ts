@@ -1,18 +1,19 @@
 import 'server-only';
 
 import {
+  type CatalogEntry,
+  type EnvSpecField,
   getCatalogEntry,
   listCatalog,
   NETWORK_NAME,
-  resolveInstallOrder,
-  type CatalogEntry,
-  type EnvSpecField,
   type PostInstallStep,
   type ResolvedDeps,
+  resolveInstallOrder,
 } from './catalog';
 import { resolveEnvForEntry } from './catalog-env';
-import { getContext, type BackofficeContext } from './index';
 import { DockerService } from './docker';
+import { EdgeManager, isEdgeEnabled } from './edge';
+import { type BackofficeContext, getContext } from './index';
 
 export type InstallInput = {
   /** Hedef servis adi (catalog.key). */
@@ -60,11 +61,7 @@ export class InstallOrchestrator {
 
       const userInput = input.envByService?.[name] ?? {};
       const existingEnv = await this.ctx.services.getEnv(name);
-      const { env: baseEnv, generated } = resolveEnvForEntry(
-        entry.envSpec,
-        userInput,
-        existingEnv,
-      );
+      const { env: baseEnv, generated } = resolveEnvForEntry(entry.envSpec, userInput, existingEnv);
 
       const internalEnv = computeInternalEnv(entry, resolvedDeps);
       const env: Record<string, string> = { ...baseEnv, ...internalEnv };
@@ -98,6 +95,9 @@ export class InstallOrchestrator {
           restart: 'unless-stopped',
         });
         await this.ctx.services.updateStatus(name, 'running', new Date());
+        if (entry.upstreamPort !== undefined) {
+          await this.ctx.services.setUpstreamPort(name, entry.upstreamPort);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         await this.ctx.services.updateStatus(name, 'failed');
@@ -118,11 +118,31 @@ export class InstallOrchestrator {
       await this.ctx.services.recordEvent({
         serviceName: name,
         kind: 'install_succeeded',
-        payloadJson: JSON.stringify({ by: input.actorEmail, tag, postInstall: postInstallResults.length }),
+        payloadJson: JSON.stringify({
+          by: input.actorEmail,
+          tag,
+          postInstall: postInstallResults.length,
+        }),
       });
 
       resolvedDeps[name] = { env };
       results.push({ name, generated, postInstall: postInstallResults });
+    }
+
+    if (isEdgeEnabled()) {
+      try {
+        const edge = new EdgeManager(this.ctx, this.docker);
+        await edge.sync();
+      } catch (err) {
+        // Edge sync hatasi install'i basarisiz saymaz; sadece event'e dusur.
+        await this.ctx.services.recordEvent({
+          serviceName: input.target,
+          kind: 'edge_sync_failed',
+          payloadJson: JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        });
+      }
     }
 
     return { target: input.target, order, results };
@@ -186,7 +206,10 @@ export class InstallOrchestrator {
     serviceEnv: Record<string, string>,
     actorEmail: string,
   ): Promise<{ kind: string; exitCode: number; logsTail: string }> {
-    const env = step.envFromService === serviceName ? serviceEnv : await this.ctx.services.getEnv(step.envFromService);
+    const env =
+      step.envFromService === serviceName
+        ? serviceEnv
+        : await this.ctx.services.getEnv(step.envFromService);
     await this.docker.pullImage(step.image, step.tag);
     const taskName = `${serviceName}-${step.kind}-${Date.now()}`;
     const { exitCode, logs } = await this.docker.runOnce({
@@ -204,16 +227,15 @@ export class InstallOrchestrator {
       payloadJson: JSON.stringify({ by: actorEmail, exitCode, logs: logsTail }),
     });
     if (exitCode !== 0) {
-      throw new Error(`Post-install ${step.kind} basarisiz (exit ${exitCode}). Loglar: ${logsTail.slice(-500)}`);
+      throw new Error(
+        `Post-install ${step.kind} basarisiz (exit ${exitCode}). Loglar: ${logsTail.slice(-500)}`,
+      );
     }
     return { kind: step.kind, exitCode, logsTail };
   }
 }
 
-function computeInternalEnv(
-  entry: CatalogEntry,
-  deps: ResolvedDeps,
-): Record<string, string> {
+function computeInternalEnv(entry: CatalogEntry, deps: ResolvedDeps): Record<string, string> {
   if (!entry.internalEnvFromDeps) return {};
   const out: Record<string, string> = {};
   for (const [key, fn] of Object.entries(entry.internalEnvFromDeps)) {
@@ -227,4 +249,4 @@ function tail(text: string, max: number): string {
   return text.slice(text.length - max);
 }
 
-export { listCatalog, getCatalogEntry, NETWORK_NAME, type EnvSpecField, type CatalogEntry };
+export { type CatalogEntry, type EnvSpecField, getCatalogEntry, listCatalog, NETWORK_NAME };

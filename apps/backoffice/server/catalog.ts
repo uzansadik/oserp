@@ -28,6 +28,11 @@ export type CatalogEntry = {
   dependsOn: string[];
   postInstall: PostInstallStep[];
   internalEnvFromDeps?: Record<string, (deps: ResolvedDeps) => string>;
+  /**
+   * Container icinde dinlenen port. Edge (Caddy) reverse_proxy bu porta yapar.
+   * undefined ise servis edge'e expose edilmez (yalnizca internal docker agi).
+   */
+  upstreamPort?: number;
 };
 
 export type ResolvedDeps = Record<string, { env: Record<string, string> }>;
@@ -64,16 +69,17 @@ export const SERVICE_CATALOG = {
       { key: 'HOST', default: '0.0.0.0' },
       { key: 'PORT', default: '3000' },
     ],
-    ports: { 3000: 3000 },
+    ports: {},
+    upstreamPort: 3000,
     volumes: [],
     dependsOn: ['postgres'],
     internalEnvFromDeps: {
       DATABASE_URL: (deps) => {
-        const pg = deps['postgres'];
+        const pg = deps.postgres;
         if (!pg) throw new Error('postgres bagimliligi cozulemedi.');
-        const user = pg.env['POSTGRES_USER'] ?? 'oserp';
-        const pass = pg.env['POSTGRES_PASSWORD'] ?? '';
-        const db = pg.env['POSTGRES_DB'] ?? 'oserp';
+        const user = pg.env.POSTGRES_USER ?? 'oserp';
+        const pass = pg.env.POSTGRES_PASSWORD ?? '';
+        const db = pg.env.POSTGRES_DB ?? 'oserp';
         return `postgresql://${user}:${pass}@postgres:5432/${db}`;
       },
     },

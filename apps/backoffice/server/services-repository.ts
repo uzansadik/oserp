@@ -3,13 +3,14 @@ import { desc, eq } from 'drizzle-orm';
 
 import type { BackofficeDb } from './db';
 import {
-  serviceEvents,
-  services,
   type NewServiceEventRow,
   type NewServiceRow,
   type ServiceEventRow,
   type ServiceRow,
   type ServiceStatus,
+  serviceEvents,
+  services,
+  type TlsMode,
 } from './schema';
 
 export class ServicesRepository {
@@ -81,7 +82,27 @@ export class ServicesRepository {
     await this.db.delete(services).where(eq(services.name, name));
   }
 
-  async recordEvent(input: Pick<NewServiceEventRow, 'serviceName' | 'kind' | 'payloadJson'>): Promise<void> {
+  async setDomain(
+    name: string,
+    input: { domain: string | null; tlsMode: TlsMode; upstreamPort?: number | null },
+  ): Promise<void> {
+    await this.db
+      .update(services)
+      .set({
+        domain: input.domain,
+        tlsMode: input.tlsMode,
+        ...(input.upstreamPort !== undefined ? { upstreamPort: input.upstreamPort } : {}),
+      })
+      .where(eq(services.name, name));
+  }
+
+  async setUpstreamPort(name: string, port: number | null): Promise<void> {
+    await this.db.update(services).set({ upstreamPort: port }).where(eq(services.name, name));
+  }
+
+  async recordEvent(
+    input: Pick<NewServiceEventRow, 'serviceName' | 'kind' | 'payloadJson'>,
+  ): Promise<void> {
     await this.db.insert(serviceEvents).values(input);
   }
 

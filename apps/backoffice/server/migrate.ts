@@ -57,6 +57,26 @@ const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE services ADD COLUMN env_json TEXT NOT NULL DEFAULT '{}';
     `,
   },
+  {
+    id: '0004_edge_and_domains',
+    sql: `
+      ALTER TABLE services ADD COLUMN domain TEXT;
+      ALTER TABLE services ADD COLUMN tls_mode TEXT NOT NULL DEFAULT 'off'
+        CHECK (tls_mode IN ('off','auto','self_signed'));
+      ALTER TABLE services ADD COLUMN upstream_port INTEGER;
+
+      CREATE TABLE IF NOT EXISTS edge_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        domain TEXT,
+        tls_mode TEXT NOT NULL DEFAULT 'self_signed'
+          CHECK (tls_mode IN ('off','auto','self_signed')),
+        acme_email TEXT,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      INSERT OR IGNORE INTO edge_config (id, tls_mode) VALUES (1, 'self_signed');
+    `,
+  },
 ];
 
 export async function runMigrations(client: Client): Promise<void> {

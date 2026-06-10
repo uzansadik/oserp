@@ -93,7 +93,12 @@ export class DockerService {
           if (!onProgress) return;
           let percent: number | undefined;
           const detail = event.progressDetail;
-          if (detail && typeof detail.current === 'number' && typeof detail.total === 'number' && detail.total > 0) {
+          if (
+            detail &&
+            typeof detail.current === 'number' &&
+            typeof detail.total === 'number' &&
+            detail.total > 0
+          ) {
             percent = Math.round((detail.current / detail.total) * 100);
           }
           onProgress({
@@ -157,9 +162,7 @@ export class DockerService {
   async runContainer(spec: RunContainerSpec): Promise<string> {
     await this.removeContainer(spec.name, { ignoreMissing: true });
 
-    const env = spec.env
-      ? Object.entries(spec.env).map(([k, v]) => `${k}=${v}`)
-      : undefined;
+    const env = spec.env ? Object.entries(spec.env).map(([k, v]) => `${k}=${v}`) : undefined;
 
     const exposedPorts: Record<string, Record<string, never>> = {};
     const portBindings: Record<string, Array<{ HostPort: string }>> = {};
@@ -243,6 +246,42 @@ export class DockerService {
     await this.docker.createNetwork({ Name: name, Driver: 'bridge' });
   }
 
+  async ensureContainerOnNetwork(name: string, network: string): Promise<void> {
+    try {
+      const net = this.docker.getNetwork(network);
+      await net.connect({ Container: name });
+    } catch (err) {
+      // 403 = already connected, 404 = network/container missing.
+      if (isAlreadyAttached(err)) return;
+      if (isNotFound(err)) return;
+      throw err;
+    }
+  }
+
+  async execInContainer(
+    name: string,
+    cmd: string[],
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const container = this.docker.getContainer(name);
+    const exec = await container.exec({
+      Cmd: cmd,
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = (await exec.start({ hijack: true, stdin: false })) as Readable;
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => resolve());
+      stream.on('error', reject);
+    });
+    const merged = Buffer.concat(chunks);
+    const { stdout, stderr } = demultiplex(merged);
+    const inspect = await exec.inspect();
+    const exitCode = typeof inspect.ExitCode === 'number' ? inspect.ExitCode : -1;
+    return { exitCode, stdout, stderr };
+  }
+
   async runOnce(spec: {
     name: string;
     image: string;
@@ -252,9 +291,7 @@ export class DockerService {
     network?: string;
   }): Promise<{ exitCode: number; logs: string }> {
     await this.removeContainer(spec.name, { ignoreMissing: true });
-    const env = spec.env
-      ? Object.entries(spec.env).map(([k, v]) => `${k}=${v}`)
-      : undefined;
+    const env = spec.env ? Object.entries(spec.env).map(([k, v]) => `${k}=${v}`) : undefined;
     const created = await this.docker.createContainer({
       name: spec.name,
       Image: `${spec.image}:${spec.tag}`,
@@ -304,6 +341,31 @@ function stripMultiplexHeader(chunk: Buffer): Buffer {
   return Buffer.concat(parts);
 }
 
+function demultiplex(chunk: Buffer): { stdout: string; stderr: string } {
+  const stdoutParts: Buffer[] = [];
+  const stderrParts: Buffer[] = [];
+  let offset = 0;
+  while (offset + 8 <= chunk.length) {
+    const streamType = chunk.readUInt8(offset);
+    const size = chunk.readUInt32BE(offset + 4);
+    const start = offset + 8;
+    const end = start + size;
+    if (end > chunk.length) break;
+    const slice = chunk.subarray(start, end);
+    if (streamType === 2) stderrParts.push(slice);
+    else stdoutParts.push(slice);
+    offset = end;
+  }
+  if (offset === 0) {
+    // Header'siz raw stream (TTY); tamamini stdout say.
+    return { stdout: chunk.toString('utf8'), stderr: '' };
+  }
+  return {
+    stdout: Buffer.concat(stdoutParts).toString('utf8'),
+    stderr: Buffer.concat(stderrParts).toString('utf8'),
+  };
+}
+
 function isNotFound(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { statusCode?: number; reason?: string };
@@ -314,4 +376,11 @@ function isAlreadyStopped(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { statusCode?: number };
   return e.statusCode === 304;
+}
+
+function isAlreadyAttached(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { statusCode?: number; message?: string };
+  if (e.statusCode === 403) return true;
+  return typeof e.message === 'string' && /already exists in network/i.test(e.message);
 }

@@ -19,6 +19,23 @@ export const services = sqliteTable('services', {
   }).notNull(),
   lastStartedAt: integer('last_started_at', { mode: 'timestamp_ms' }),
   envJson: text('env_json').notNull().default('{}'),
+  domain: text('domain'),
+  tlsMode: text('tls_mode', { enum: ['off', 'auto', 'self_signed'] })
+    .notNull()
+    .default('off'),
+  upstreamPort: integer('upstream_port'),
+});
+
+export const edgeConfig = sqliteTable('edge_config', {
+  id: integer('id').primaryKey().default(1),
+  domain: text('domain'),
+  tlsMode: text('tls_mode', { enum: ['off', 'auto', 'self_signed'] })
+    .notNull()
+    .default('self_signed'),
+  acmeEmail: text('acme_email'),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
 });
 
 export const serviceEvents = sqliteTable('service_events', {
@@ -26,9 +43,7 @@ export const serviceEvents = sqliteTable('service_events', {
   serviceName: text('service_name').notNull(),
   kind: text('kind').notNull(),
   payloadJson: text('payload_json').notNull().default('{}'),
-  at: integer('at', { mode: 'timestamp_ms' })
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
+  at: integer('at', { mode: 'timestamp_ms' }).notNull().default(sql`(unixepoch() * 1000)`),
 });
 
 export const sessions = sqliteTable('sessions', {
@@ -49,3 +64,6 @@ export type NewServiceEventRow = typeof serviceEvents.$inferInsert;
 export type ServiceStatus = ServiceRow['status'];
 export type SessionRow = typeof sessions.$inferSelect;
 export type NewSessionRow = typeof sessions.$inferInsert;
+export type EdgeConfigRow = typeof edgeConfig.$inferSelect;
+export type NewEdgeConfigRow = typeof edgeConfig.$inferInsert;
+export type TlsMode = ServiceRow['tlsMode'];

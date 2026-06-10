@@ -1,6 +1,6 @@
 export async function register(): Promise<void> {
-  if (process.env['NEXT_RUNTIME'] !== 'nodejs') return;
-  if (process.env['BACKOFFICE_BOOTSTRAP_EDGE'] === '0') return;
+  if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  if (process.env.BACKOFFICE_BOOTSTRAP_EDGE === '0') return;
 
   // Edge bootstrap docker daemon olmadan calisamaz; hata varsa sessizce logla.
   try {

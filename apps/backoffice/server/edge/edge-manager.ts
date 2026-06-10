@@ -17,15 +17,15 @@ export const BACKOFFICE_INTERNAL_PORT = 8000;
  * gerekir. install.sh `BACKOFFICE_HOST_DATA_DIR` env'ini set eder.
  */
 function resolveHostDataDir(): string {
-  return process.env['BACKOFFICE_HOST_DATA_DIR'] ?? '/var/lib/oserp-backoffice';
+  return process.env.BACKOFFICE_HOST_DATA_DIR ?? '/var/lib/oserp-backoffice';
 }
 
 function resolveContainerDataDir(): string {
-  return process.env['BACKOFFICE_DATA_DIR'] ?? '/data';
+  return process.env.BACKOFFICE_DATA_DIR ?? '/data';
 }
 
 function resolveBackofficeContainerName(): string {
-  return process.env['BACKOFFICE_CONTAINER_NAME'] ?? 'oserp-backoffice';
+  return process.env.BACKOFFICE_CONTAINER_NAME ?? 'oserp-backoffice';
 }
 
 function caddyfilePathOnHost(): string {
@@ -170,7 +170,7 @@ export class EdgeManager {
 }
 
 export function isEdgeEnabled(): boolean {
-  const raw = process.env['EDGE_ENABLED'];
+  const raw = process.env.EDGE_ENABLED;
   if (raw === undefined) return true;
   return raw === '1' || raw.toLowerCase() === 'true';
 }

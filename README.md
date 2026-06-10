@@ -144,24 +144,29 @@ komutu çalıştırmanız gerekmez.
 Sunucuda root (veya sudo) yetkisiyle:
 
 ```bash
+# IP-only (self-signed) — domain gerektirmez
 curl -fsSL https://raw.githubusercontent.com/uzansadik/oserp/main/scripts/install.sh | sudo bash
+
+# Domain modu (ACME / Let's Encrypt) — önerilen
+curl -fsSL https://raw.githubusercontent.com/uzansadik/oserp/main/scripts/install.sh | \
+  sudo bash -s -- PRIMARY_DOMAIN=panel.firma.com ACME_EMAIL=admin@firma.com
 ```
 
 Veya repoyu klonlayıp:
 
 ```bash
+git clone https://github.com/uzansadik/oserp.git
+cd oserp
+
+# IP-only
 sudo ./scripts/install.sh
+
+# Domain modu
+sudo PRIMARY_DOMAIN=panel.firma.com ACME_EMAIL=admin@firma.com ./scripts/install.sh
 ```
 
-Özelleştirme:
-
-```bash
-# Domain modu (ACME/Let's Encrypt ile gercek sertifika)
-sudo PRIMARY_DOMAIN=backoffice.example.com ACME_EMAIL=admin@example.com ./scripts/install.sh
-
-# Sadece IP kurulumu (self-signed cert)
-sudo ./scripts/install.sh
-```
+> `bash -s --` kullanmak pipe üzerinden sudo yetkisiyle çalıştırmanın en güvenli
+> yoludur; komut argümanları doğrudan shell'e geçer, dosya önce indirilir.
 
 | Değişken         | Varsayılan                                       | Açıklama                                  |
 | ---------------- | ------------------------------------------------ | ----------------------------------------- |

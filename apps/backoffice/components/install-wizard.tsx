@@ -25,7 +25,7 @@ export type CatalogEntryView = {
   }>;
   ports: Record<string, number> | Record<number, number>;
   volumes: string[];
-  postInstall: Array<{ kind: string; command: string[] }>;
+  postInstall: Array<{ kind: string; command?: string[] }>;
 };
 
 type Props = { entries: CatalogEntryView[] };

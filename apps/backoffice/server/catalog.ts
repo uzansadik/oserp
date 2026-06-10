@@ -8,13 +8,33 @@ export type EnvSpecField = {
   optional?: boolean;
 };
 
-export type PostInstallStep = {
-  kind: 'migrate';
-  image: string;
-  tag: string;
-  command: string[];
-  envFromService: string;
-};
+/**
+ * Bir post-install step'i. İki varyant:
+ *  - `migrate`: kendi image'ını `runOnce` ile çalıştırır (container başlatır, exit olur, loglar).
+ *  - `seed-system-user`: backoffice kendisi HTTP POST yapar (kendi image çalıştırmaz).
+ *    Çünkü mevcut `iam` container'ı zaten ayakta, ona doğrudan internal DNS
+ *    (`http://iam:3000`) üzerinden ulaşılır. System user payload'ı step.payload
+ *    alanında gelir (InstallInput.systemUser'dan).
+ */
+export type PostInstallStep =
+  | {
+      kind: 'migrate';
+      image: string;
+      tag: string;
+      command: string[];
+      envFromService: string;
+    }
+  | {
+      kind: 'seed-system-user';
+      /**
+       * Hangi servise HTTP POST atılacak (sadece `iam` öngörülüyor).
+       * Docker network içinde DNS olarak kullanılır: `http://{targetService}:{targetPort}`.
+       */
+      targetService: 'iam';
+      targetPort: number;
+      /** Backoffice → IAM relative path (örn. `/iam/users/bootstrap-register`). */
+      endpointPath: string;
+    };
 
 export type CatalogEntry = {
   name: string;
@@ -90,6 +110,14 @@ export const SERVICE_CATALOG = {
         tag: 'latest',
         command: ['node', 'dist/migrate.js'],
         envFromService: 'iam',
+      },
+      {
+        kind: 'seed-system-user',
+        targetService: 'iam',
+        targetPort: 3000,
+        // IAM Fastify router `/iam` prefix'iyle mount edildiği için path başına
+        // `/iam` ekliyoruz. Asıl route: apps/api/src/app.ts → app.register(iamRouter, { prefix: '/iam' })
+        endpointPath: '/iam/users/bootstrap-register',
       },
     ],
   },

@@ -27,7 +27,10 @@ export async function GET() {
     })),
     ports: entry.ports,
     volumes: entry.volumes,
-    postInstall: entry.postInstall.map((s) => ({ kind: s.kind, command: s.command })),
+    postInstall: entry.postInstall.map((s) => ({
+      kind: s.kind,
+      ...(s.kind === 'migrate' ? { command: s.command } : {}),
+    })),
   }));
   return NextResponse.json({ entries });
 }

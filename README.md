@@ -183,6 +183,42 @@ sudo ./scripts/install.sh
 - `PRIMARY_DOMAIN` set → **Domain** modu. Caddy ACME HTTP-01 ile otomatik sertifika alır
   (80 portu açık olmalı). `https://${PRIMARY_DOMAIN}` üzerinden uyarısız erişim.
 
+### Hangi modu seçmeliyim?
+
+**Domain'iniz varsa (örn. `example.com`, `firma.com.tr`, kendi subdomain'iniz):**
+
+1. Domain sağlayıcınızın DNS yönetimine girin.
+2. Backoffice için kullanmak istediğiniz **ana hostname**'i seçin (örn. `panel.firma.com.tr`).
+3. O hostname için **A kaydı** ekleyin → sunucu IP'niz (örn. `203.0.113.42`).
+4. 5-10 dakika DNS yayılmasını bekleyin. Doğrulamak için:
+   ```bash
+   dig +short panel.firma.com.tr   # sunucu IP'nizi dönmeli
+   ```
+5. Kurulumu domain modunda çalıştırın:
+   ```bash
+   sudo PRIMARY_DOMAIN=panel.firma.com.tr ACME_EMAIL=admin@firma.com.tr bash install.sh
+   ```
+6. `https://panel.firma.com.tr` adresine gidin — sertifika uyarısız açılmalı.
+
+> **ACME / Let's Encrypt notu:** `ACME_EMAIL` verilmezse `admin@${PRIMARY_DOMAIN}` kullanılır
+> ve Let's Encrypt sertifika süresi dolmadan önce uyarı gönderir. Gerçek bir adres verin.
+
+**Domain'iniz yoksa (sadece IP, test/hızlı deneme):**
+
+```bash
+sudo bash install.sh   # PRIMARY_DOMAIN bos birakildi -> IP-only modu
+```
+
+`http://<sunucu-ip>` ile giriş yapılır. HTTPS için tarayıcı self-signed uyarısı verir,
+"Advanced → Proceed anyway" ile geçilir. **Üretim için domain modu şiddetle tavsiye edilir.**
+
+**Ön koşullar (her iki mod):**
+
+- Ubuntu 22.04 veya 24.04 LTS (root veya sudo yetkisi)
+- 22 (SSH) ve 80, 443 (HTTP/HTTPS) portları dış dünyaya açık
+- Sunucu IP'si statik (kiralık VPS veya reserved IP)
+- Domain modu için: yukarıdaki DNS adımları tamamlanmış
+
 Kurulum sonrası ilgili adrese gidip ilk açılış admin sihirbazını tamamlayın,
 ardından **Servis Kur** ekranından `iam` (PostgreSQL + API + migration) servisini
 tek tıkla ayağa kaldırın.

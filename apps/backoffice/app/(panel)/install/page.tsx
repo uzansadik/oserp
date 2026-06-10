@@ -29,6 +29,7 @@ export default function InstallPage() {
       // yeterli, detaylar orkestrator tarafinda.
       ...(s.kind === 'migrate' ? { command: s.command } : {}),
     })),
+    systemUserRequired: entry.name === 'iam',
   }));
 
   return (

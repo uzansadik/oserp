@@ -31,6 +31,7 @@ export async function GET() {
       kind: s.kind,
       ...(s.kind === 'migrate' ? { command: s.command } : {}),
     })),
+    systemUserRequired: entry.name === 'iam',
   }));
   return NextResponse.json({ entries });
 }

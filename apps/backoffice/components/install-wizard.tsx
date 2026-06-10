@@ -26,9 +26,34 @@ export type CatalogEntryView = {
   ports: Record<string, number> | Record<number, number>;
   volumes: string[];
   postInstall: Array<{ kind: string; command?: string[] }>;
+  /**
+   * Bu servis kurulurken kullaniciya "sistem kullanicisi" formu gosterilir.
+   * Ornek: iam icin ilk super-admin seed icin zorunlu.
+   */
+  systemUserRequired?: boolean;
 };
 
 type Props = { entries: CatalogEntryView[] };
+
+type SystemUserState = {
+  name: string;
+  surname: string;
+  email: string;
+  username: string;
+  password: string;
+};
+
+/** Sistem kullanicisi formunun istemci-tarafli validasyonu. */
+function validateSystemUser(s: SystemUserState): string | null {
+  if (s.name.trim().length === 0) return 'Ad zorunlu.';
+  if (s.surname.trim().length === 0) return 'Soyad zorunlu.';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)) return 'Gecerli bir e-posta gerekli.';
+  if (s.username.length < 3 || s.username.length > 20) {
+    return 'Kullanici adi 3-20 karakter olmali.';
+  }
+  if (s.password.length < 8) return 'Parola en az 8 karakter olmali.';
+  return null;
+}
 
 type InstallReport = {
   target: string;
@@ -45,6 +70,13 @@ export function InstallWizard({ entries }: Props) {
   const [selected, setSelected] = useState<string | null>(entries[0]?.name ?? null);
   const [tag, setTag] = useState<string>('');
   const [envByService, setEnvByService] = useState<Record<string, Record<string, string>>>({});
+  const [systemUser, setSystemUser] = useState<SystemUserState>({
+    name: '',
+    surname: '',
+    email: '',
+    username: '',
+    password: '',
+  });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<InstallReport | null>(null);
@@ -85,6 +117,15 @@ export function InstallWizard({ entries }: Props) {
     if (!selectedEntry) return;
     setError(null);
     setReport(null);
+
+    if (selectedEntry.systemUserRequired) {
+      const validationError = validateSystemUser(systemUser);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
     setPending(true);
     try {
       const res = await fetch(`/api/catalog/${selectedEntry.name}/install`, {
@@ -93,6 +134,7 @@ export function InstallWizard({ entries }: Props) {
         body: JSON.stringify({
           ...(tag.length > 0 ? { tag } : {}),
           envByService,
+          ...(selectedEntry.systemUserRequired ? { systemUser } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as {
@@ -247,6 +289,47 @@ export function InstallWizard({ entries }: Props) {
                 </div>
               ))}
             </div>
+
+            {selectedEntry.systemUserRequired ? (
+              <div className="border-border flex flex-col gap-3 rounded-md border p-4">
+                <header>
+                  <h4 className="font-medium">Sistem Kullanıcısı</h4>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    Bu kullanıcı <span className="font-mono">iam</span> servisinin ilk
+                    yöneticisi olarak otomatik oluşturulacak (super-admin rolü, tüm
+                    yetkiler). Yalnızca kurulum anında ve boş veritabanında kabul edilir.
+                  </p>
+                </header>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(
+                    [
+                      { key: 'name', label: 'Ad', type: 'text', autoComplete: 'given-name' },
+                      { key: 'surname', label: 'Soyad', type: 'text', autoComplete: 'family-name' },
+                      { key: 'email', label: 'E-posta', type: 'email', autoComplete: 'email' },
+                      { key: 'username', label: 'Kullanıcı adı', type: 'text', autoComplete: 'username' },
+                      { key: 'password', label: 'Parola', type: 'password', autoComplete: 'new-password' },
+                    ] as const
+                  ).map((field) => {
+                    const id = `system-user-${field.key}`;
+                    return (
+                      <div key={field.key} className="flex flex-col gap-1">
+                        <Label htmlFor={id}>{field.label}</Label>
+                        <Input
+                          id={id}
+                          name={field.key}
+                          type={field.type}
+                          autoComplete={field.autoComplete}
+                          value={systemUser[field.key]}
+                          onChange={(e) =>
+                            setSystemUser((prev) => ({ ...prev, [field.key]: e.target.value }))
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
 
             {error ? (
               <Alert variant="destructive">

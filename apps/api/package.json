@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@oserp-community/iam": "workspace:*",
+    "@oserp-community/inventory": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
     "fastify": "^5.2.0",

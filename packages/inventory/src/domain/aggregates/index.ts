@@ -1,0 +1,1 @@
+export { ProductAggregate } from './ProductAggregate';

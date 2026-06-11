@@ -1,0 +1,49 @@
+{
+  "name": "@oserp-community/inventory",
+  "version": "0.0.0",
+  "description": "Inventory module for Oserp Community (Product, PriceList, StockMovement, InventoryLevel, Lot)",
+  "main": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts"
+    },
+    "./domain": {
+      "import": "./dist/domain/index.mjs",
+      "types": "./dist/domain/index.d.mts"
+    },
+    "./application": {
+      "import": "./dist/application/index.mjs",
+      "types": "./dist/application/index.d.mts"
+    },
+    "./api": {
+      "import": "./dist/api/index.mjs",
+      "types": "./dist/api/index.d.mts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest run --coverage",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "fastify": "^5.2.0",
+    "pg": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
+    "drizzle-kit": "catalog:",
+    "tsup": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

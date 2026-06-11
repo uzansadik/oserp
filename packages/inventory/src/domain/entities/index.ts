@@ -1,3 +1,5 @@
 export { AggregateRoot } from './AggregateRoot';
-export { Product } from './Product';
-export type { CreateProductProps, ReconstituteProductProps } from './Product';
+export { Product, type CreateProductProps, type ReconstituteProductProps } from './Product';
+export { StockMovement, type CreateStockMovementProps, type ReconstituteStockMovementProps } from './StockMovement';
+export { MovementLine } from './MovementLine';
+export { InventoryLevel, type ReconstituteInventoryLevelProps } from './InventoryLevel';

@@ -1,5 +1,7 @@
 import type { OutboxPort } from './OutboxPort';
 import type { ProductRepositoryPort } from './ProductRepositoryPort';
+import type { StockMovementRepositoryPort } from './StockMovementRepositoryPort';
+import type { InventoryLevelRepositoryPort } from './InventoryLevelRepositoryPort';
 
 /**
  * Tek bir transaction kapsamında erişilen repository'ler ve outbox.
@@ -8,6 +10,8 @@ import type { ProductRepositoryPort } from './ProductRepositoryPort';
  */
 export interface UnitOfWorkContext {
   readonly products: ProductRepositoryPort;
+  readonly stockMovements: StockMovementRepositoryPort;
+  readonly inventoryLevels: InventoryLevelRepositoryPort;
   readonly outbox: OutboxPort;
 }
 

@@ -8,4 +8,15 @@ export {
   type ListProductsFilter,
   type ListProductsResult,
 } from './ProductRepositoryPort';
+export {
+  StockMovementRepositoryPort,
+  type ListMovementsFilter,
+  type ListMovementsResult,
+} from './StockMovementRepositoryPort';
+export {
+  InventoryLevelRepositoryPort,
+  type ListLowStockResult,
+} from './InventoryLevelRepositoryPort';
+export { StockProjectionService } from './StockProjectionServicePort';
+export { ReorderEvaluator } from './ReorderEvaluatorPort';
 export { UnitOfWorkPort, type UnitOfWorkContext } from './UnitOfWorkPort';

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { InventoryContainer } from '../../container';
 import { registerProductRoutes } from './productRoutes';
+import { registerStockRoutes } from './stockRoutes';
 
 /**
  * Fastify plugin: tüm inventory route'larını mount eder.
@@ -11,4 +12,5 @@ export async function inventoryRouter(
   opts: { container: InventoryContainer },
 ): Promise<void> {
   await registerProductRoutes(app, opts.container);
+  await registerStockRoutes(app, opts.container);
 }

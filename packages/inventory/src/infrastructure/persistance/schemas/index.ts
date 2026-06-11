@@ -7,3 +7,15 @@ export type {
 } from './inv.product-barcode.schema';
 export { invOutbox } from './inv.outbox.schema';
 export type { InvOutboxRow, InvOutboxInsert } from './inv.outbox.schema';
+export { invStockMovements, invStockMovementLines } from './inv.stock-movement.schema';
+export type {
+  InvStockMovementRow,
+  InvStockMovementInsert,
+  InvStockMovementLineRow,
+  InvStockMovementLineInsert,
+} from './inv.stock-movement.schema';
+export { invInventoryLevels } from './inv.inventory-level.schema';
+export type {
+  InvInventoryLevelRow,
+  InvInventoryLevelInsert,
+} from './inv.inventory-level.schema';

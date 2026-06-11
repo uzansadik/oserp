@@ -2,13 +2,17 @@ import type {
   UnitOfWorkContext,
   UnitOfWorkPort,
 } from '@oserp-community/inventory/application/ports/UnitOfWorkPort';
+import { DrizzleInventoryLevelRepository } from './repositories/DrizzleInventoryLevelRepository';
 import { DrizzleOutbox } from './DrizzleOutbox';
-import type { InventoryDb, InventoryDbClient } from './db';
 import { DrizzleProductRepository } from './repositories/DrizzleProductRepository';
+import { DrizzleStockMovementRepository } from './repositories/DrizzleStockMovementRepository';
+import type { InventoryDb, InventoryDbClient } from './db';
 
 function buildContext(client: InventoryDbClient): UnitOfWorkContext {
   return {
     products: new DrizzleProductRepository(client),
+    stockMovements: new DrizzleStockMovementRepository(client),
+    inventoryLevels: new DrizzleInventoryLevelRepository(client),
     outbox: new DrizzleOutbox(client),
   };
 }

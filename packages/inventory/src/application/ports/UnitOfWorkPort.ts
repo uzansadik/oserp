@@ -3,6 +3,7 @@ import type { ProductRepositoryPort } from './ProductRepositoryPort';
 import type { StockMovementRepositoryPort } from './StockMovementRepositoryPort';
 import type { InventoryLevelRepositoryPort } from './InventoryLevelRepositoryPort';
 import type { ReservationRepository } from './ReservationRepositoryPort';
+import type { TransferRepository } from './TransferRepositoryPort';
 
 /**
  * Tek bir transaction kapsamında erişilen repository'ler ve outbox.
@@ -14,6 +15,7 @@ export interface UnitOfWorkContext {
   readonly stockMovements: StockMovementRepositoryPort;
   readonly inventoryLevels: InventoryLevelRepositoryPort;
   readonly reservations: ReservationRepository;
+  readonly transfers: TransferRepository;
   readonly outbox: OutboxPort;
 }
 

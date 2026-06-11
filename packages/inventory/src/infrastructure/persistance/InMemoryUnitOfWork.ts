@@ -7,6 +7,7 @@ import { InMemoryOutbox } from './InMemoryOutbox';
 import { InMemoryProductRepository } from './repositories/InMemoryProductRepository';
 import { InMemoryReservationRepository } from './repositories/InMemoryReservationRepository';
 import { InMemoryStockMovementRepository } from './repositories/InMemoryStockMovementRepository';
+import { InMemoryTransferRepository } from './repositories/InMemoryTransferRepository';
 
 /**
  * In-memory UnitOfWork — transaction semantiği yoktur, repository'leri
@@ -18,6 +19,7 @@ export class InMemoryUnitOfWork implements UnitOfWorkPort {
   public readonly stockMovements: InMemoryStockMovementRepository;
   public readonly inventoryLevels: InMemoryInventoryLevelRepository;
   public readonly reservations: InMemoryReservationRepository;
+  public readonly transfers: InMemoryTransferRepository;
   public readonly outbox: InMemoryOutbox;
 
   constructor() {
@@ -25,6 +27,7 @@ export class InMemoryUnitOfWork implements UnitOfWorkPort {
     this.stockMovements = new InMemoryStockMovementRepository();
     this.inventoryLevels = new InMemoryInventoryLevelRepository();
     this.reservations = new InMemoryReservationRepository();
+    this.transfers = new InMemoryTransferRepository();
     this.outbox = new InMemoryOutbox();
   }
 
@@ -34,6 +37,7 @@ export class InMemoryUnitOfWork implements UnitOfWorkPort {
       stockMovements: this.stockMovements,
       inventoryLevels: this.inventoryLevels,
       reservations: this.reservations,
+      transfers: this.transfers,
       outbox: this.outbox,
     });
   }

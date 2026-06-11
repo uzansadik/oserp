@@ -20,3 +20,5 @@ export { ReorderStatus, ReorderStatusVO } from './ReorderStatus';
 export { ValuationSnapshot } from './ValuationSnapshot';
 export { ReservationStatus } from './ReservationStatus';
 export { ReservationId, ReservationLineRef } from './ReservationId';
+export { TransferStatus } from './TransferStatus';
+export { TransferId, TransferLineRef } from './TransferId';

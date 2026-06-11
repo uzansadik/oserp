@@ -144,6 +144,13 @@ export class InventoryLevel extends AggregateRoot {
     this.emitLevelChanged();
   }
 
+  /** Sadece inTransit'ten düş (kaynak lokasyon, transfer teslim alındığında). */
+  applyTransitClear(quantity: string): void {
+    this.quantity = this.quantity.clearInTransit(quantity);
+    this.touch();
+    this.emitLevelChanged();
+  }
+
   /** ReorderEvaluator tarafından çağrılır (low/high stock alarm). */
   updateReorderStatus(newStatus: ReorderStatusVO): void {
     if (this.reorderStatus.getValue() === newStatus.getValue()) return;

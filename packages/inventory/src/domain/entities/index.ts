@@ -4,3 +4,4 @@ export { StockMovement, type CreateStockMovementProps, type ReconstituteStockMov
 export { MovementLine } from './MovementLine';
 export { InventoryLevel, type ReconstituteInventoryLevelProps } from './InventoryLevel';
 export { ReservationLine, type ReservationLineProps } from './ReservationLine';
+export { TransferLine, type TransferLineProps } from './TransferLine';

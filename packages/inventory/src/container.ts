@@ -44,6 +44,7 @@ import { DrizzleLotRepository } from './infrastructure/persistance/repositories/
 import { DrizzleSalesOrderRepository } from './infrastructure/persistance/repositories/DrizzleSalesOrderRepository';
 import { DrizzleInvoiceRepository } from './infrastructure/persistance/repositories/DrizzleInvoiceRepository';
 import { DrizzleReservationRepository } from './infrastructure/persistance/repositories/DrizzleReservationRepository';
+import { DrizzleTransferRepository } from './infrastructure/persistance/repositories/DrizzleTransferRepository';
 import {
   CreatePriceListHandler,
   AddEntryHandler,
@@ -93,6 +94,17 @@ import {
   ListReservationsHandler,
 } from './application/handlers/ReservationHandlers';
 import { ReservationService } from './application/services/ReservationService';
+import {
+  CreateTransferHandler,
+  DispatchTransferHandler,
+  MarkInTransitHandler,
+  ReceiveTransferHandler,
+  CloseTransferHandler,
+  CancelTransferHandler,
+  GetTransferHandler,
+  ListTransfersHandler,
+} from './application/handlers/TransferHandlers';
+import { TransferService } from './application/services/TransferService';
 import type { InventoryDb } from './infrastructure/persistance/db';
 
 export type InventoryContainerConfig = {
@@ -123,6 +135,7 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const orderRepo = new DrizzleSalesOrderRepository(db);
   const invoiceRepo = new DrizzleInvoiceRepository(db);
   const reservationRepo = new DrizzleReservationRepository(db);
+  const transferRepo = new DrizzleTransferRepository(db);
 
   // Services
   const projection = new StockProjectionServiceImpl(uow, inventoryLevels);
@@ -134,6 +147,14 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const reservationService = new ReservationService(
     uow,
     reservationRepo,
+    lotRepo,
+    inventoryLevels,
+    fefoStrategy,
+    clock,
+  );
+  const transferService = new TransferService(
+    uow,
+    transferRepo,
     lotRepo,
     inventoryLevels,
     fefoStrategy,
@@ -185,6 +206,13 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     createReservation: new CreateReservationHandler(reservationService),
     releaseReservation: new ReleaseReservationHandler(reservationService),
     commitReservation: new CommitReservationHandler(reservationService),
+    // Transfers (Faz 7)
+    createTransfer: new CreateTransferHandler(transferService),
+    dispatchTransfer: new DispatchTransferHandler(transferService),
+    markInTransit: new MarkInTransitHandler(transferService),
+    receiveTransfer: new ReceiveTransferHandler(transferService),
+    closeTransfer: new CloseTransferHandler(transferService),
+    cancelTransfer: new CancelTransferHandler(transferService),
   } as const;
 
   const queries = {
@@ -212,14 +240,17 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     // Reservations (Faz 6)
     getReservation: new GetReservationHandler(reservationRepo),
     listReservations: new ListReservationsHandler(reservationRepo),
+    // Transfers (Faz 7)
+    getTransfer: new GetTransferHandler(transferRepo),
+    listTransfers: new ListTransfersHandler(transferRepo),
   } as const;
 
   return {
     config,
     adapters: { clock, uuid, eventBus, outboxPublisher },
-    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService, orderPricing, reservationService },
+    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService, orderPricing, reservationService, transferService },
     uow,
-    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo, orderRepo, invoiceRepo, reservationRepo },
+    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo, orderRepo, invoiceRepo, reservationRepo, transferRepo },
     commands,
     queries,
   };

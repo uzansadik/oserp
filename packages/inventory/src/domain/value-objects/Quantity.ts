@@ -92,6 +92,20 @@ export class Quantity {
   }
 
   /**
+   * Sadece inTransit'ten düş (transfer teslim alındığında kaynak lokasyonda
+   * kullanılır). onHand değişmez — kayıp olan zaten dispatch sırasında
+   * çıkmıştı.
+   */
+  clearInTransit(delta: string): Quantity {
+    Quantity.assertNonNegative(delta, 'delta');
+    const trn = Quantity.toBigInt(this.inTransit) - Quantity.toBigInt(delta);
+    if (trn < 0n) {
+      throw new Error(`InTransit yetersiz: ${this.inTransit} < ${delta}`);
+    }
+    return new Quantity(this.onHand, this.reserved, trn.toString());
+  }
+
+  /**
    * Rezervasyon: `delta` kadar miktar available'tan reserved'e taşınır.
    * onHand değişmez; sadece `available` (onHand-reserved-inTransit) azalır.
    * Yeterli available yoksa hata.

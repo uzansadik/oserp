@@ -40,3 +40,13 @@ export {
   ReservationReleasedEvent,
   type ReservationLinePayload,
 } from './ReservationEvents';
+// Transfer (Faz 7)
+export {
+  TransferCreatedEvent,
+  TransferDispatchedEvent,
+  TransferInTransitEvent,
+  TransferReceivedEvent,
+  TransferClosedEvent,
+  TransferCancelledEvent,
+  type TransferLinePayload,
+} from './TransferEvents';

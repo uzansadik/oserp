@@ -26,3 +26,10 @@ export type {
   InvReservationLineRow,
   InvReservationLineInsert,
 } from './inv.reservation.schema';
+export { transfers, transferLines } from './inv.transfer.schema';
+export type {
+  InvTransferRow,
+  InvTransferInsert,
+  InvTransferLineRow,
+  InvTransferLineInsert,
+} from './inv.transfer.schema';

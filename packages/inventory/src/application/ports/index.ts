@@ -24,3 +24,7 @@ export {
   ReservationRepository,
   type ReservationSearchCriteria,
 } from './ReservationRepositoryPort';
+export {
+  TransferRepository,
+  type TransferSearchCriteria,
+} from './TransferRepositoryPort';

@@ -13,3 +13,30 @@ export { StockTransferredEvent } from './StockTransferredEvent';
 export { StockAdjustedEvent } from './StockAdjustedEvent';
 export { StockScrappedEvent } from './StockScrappedEvent';
 export { StockLevelChangedEvent } from './StockLevelChangedEvent';
+// Lot (Faz 4)
+export {
+  LotCreatedEvent,
+  LotConsumedEvent,
+  LotExpiredEvent,
+  SerialNumberAllocatedEvent,
+} from './LotEvents';
+// Sales / Invoice (Faz 5)
+export {
+  OrderCreatedEvent,
+  OrderLineAddedEvent,
+  OrderConfirmedEvent,
+  OrderFulfilledEvent,
+  OrderCancelledEvent,
+  InvoiceCreatedEvent,
+  InvoiceIssuedEvent,
+  InvoicePaidEvent,
+  InvoiceVoidedEvent,
+  PaymentRecordedEvent,
+} from './SalesOrderEvents';
+// Reservation (Faz 6)
+export {
+  ReservationCreatedEvent,
+  ReservationCommittedEvent,
+  ReservationReleasedEvent,
+  type ReservationLinePayload,
+} from './ReservationEvents';

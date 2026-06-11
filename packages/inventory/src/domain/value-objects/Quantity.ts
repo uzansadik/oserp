@@ -91,6 +91,65 @@ export class Quantity {
     return new Quantity(on.toString(), this.reserved, trn.toString());
   }
 
+  /**
+   * Rezervasyon: `delta` kadar miktar available'tan reserved'e taşınır.
+   * onHand değişmez; sadece `available` (onHand-reserved-inTransit) azalır.
+   * Yeterli available yoksa hata.
+   */
+  reserve(delta: string): Quantity {
+    Quantity.assertNonNegative(delta, 'delta');
+    const d = Quantity.toBigInt(delta);
+    const on = Quantity.toBigInt(this.onHand);
+    const res = Quantity.toBigInt(this.reserved);
+    const trn = Quantity.toBigInt(this.inTransit);
+    const newRes = res + d;
+    if (newRes + trn > on) {
+      throw new Error(
+        `Insufficient available stock to reserve: onHand=${this.onHand}, reserved=${this.reserved}, inTransit=${this.inTransit}, requested=${delta}`,
+      );
+    }
+    return new Quantity(this.onHand, newRes.toString(), this.inTransit);
+  }
+
+  /**
+   * Rezervasyon serbest bırakma: `delta` kadar reserved azalır.
+   * Delta, mevcut reserved'ten büyükse hata.
+   */
+  release(delta: string): Quantity {
+    Quantity.assertNonNegative(delta, 'delta');
+    const d = Quantity.toBigInt(delta);
+    const res = Quantity.toBigInt(this.reserved);
+    if (d > res) {
+      throw new Error(
+        `Cannot release ${delta} from reserved=${this.reserved}`,
+      );
+    }
+    const newRes = res - d;
+    return new Quantity(this.onHand, newRes.toString(), this.inTransit);
+  }
+
+  /**
+   * Rezervasyon commit: `delta` kadar hem onHand hem reserved azalır.
+   * Gerçek sevkiyat anında çağrılır.
+   */
+  commitReservation(delta: string): Quantity {
+    Quantity.assertNonNegative(delta, 'delta');
+    const d = Quantity.toBigInt(delta);
+    const on = Quantity.toBigInt(this.onHand);
+    const res = Quantity.toBigInt(this.reserved);
+    if (d > on) {
+      throw new Error(`Insufficient onHand to commit: ${this.onHand} < ${delta}`);
+    }
+    if (d > res) {
+      throw new Error(`Cannot commit ${delta} from reserved=${this.reserved}`);
+    }
+    return new Quantity(
+      (on - d).toString(),
+      (res - d).toString(),
+      this.inTransit,
+    );
+  }
+
   isZero(): boolean {
     return Quantity.toBigInt(this.onHand) === 0n
       && Quantity.toBigInt(this.reserved) === 0n

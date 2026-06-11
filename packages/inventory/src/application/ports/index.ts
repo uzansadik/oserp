@@ -20,3 +20,7 @@ export {
 export { StockProjectionService } from './StockProjectionServicePort';
 export { ReorderEvaluator } from './ReorderEvaluatorPort';
 export { UnitOfWorkPort, type UnitOfWorkContext } from './UnitOfWorkPort';
+export {
+  ReservationRepository,
+  type ReservationSearchCriteria,
+} from './ReservationRepositoryPort';

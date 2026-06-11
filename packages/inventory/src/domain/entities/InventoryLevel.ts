@@ -151,6 +151,32 @@ export class InventoryLevel extends AggregateRoot {
     this.touch();
   }
 
+  // ── Reservation mutasyonları (ReservationService tarafından çağrılır) ──
+
+  /** Stok rezerve et (reserved += qty). Available = onHand - reserved - inTransit. */
+  applyReservation(quantity: string): void {
+    this.quantity = this.quantity.reserve(quantity);
+    this.touch();
+    this.emitLevelChanged();
+  }
+
+  /** Rezervasyonu serbest bırak (reserved -= qty). */
+  applyRelease(quantity: string): void {
+    this.quantity = this.quantity.release(quantity);
+    this.touch();
+    this.emitLevelChanged();
+  }
+
+  /**
+   * Rezervasyon commit: hem onHand hem reserved azalır.
+   * Gerçek sevkiyat anında çağrılır (invoice paid → stock physically leaves).
+   */
+  applyReservationCommit(quantity: string): void {
+    this.quantity = this.quantity.commitReservation(quantity);
+    this.touch();
+    this.emitLevelChanged();
+  }
+
   // ── Getters ──
   getProductId(): ProductId { return this.productId; }
   getLocation(): LocationRef { return this.location; }

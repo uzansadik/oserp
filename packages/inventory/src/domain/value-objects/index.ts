@@ -18,3 +18,5 @@ export { LocationRef } from './LocationRef';
 export { LotRef } from './LotRef';
 export { ReorderStatus, ReorderStatusVO } from './ReorderStatus';
 export { ValuationSnapshot } from './ValuationSnapshot';
+export { ReservationStatus } from './ReservationStatus';
+export { ReservationId, ReservationLineRef } from './ReservationId';

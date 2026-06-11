@@ -4,6 +4,7 @@ import { registerProductRoutes } from './productRoutes';
 import { registerStockRoutes } from './stockRoutes';
 import { registerPriceListRoutes } from './priceListRoutes';
 import { registerLotRoutes } from './lotRoutes';
+import { registerReservationRoutes } from './reservationRoutes';
 import { registerSalesRoutes } from './salesRoutes';
 
 /**
@@ -19,4 +20,5 @@ export async function inventoryRouter(
   await registerPriceListRoutes(app, opts.container);
   await registerLotRoutes(app, opts.container);
   await registerSalesRoutes(app, opts.container);
+  await registerReservationRoutes(app, opts.container);
 }

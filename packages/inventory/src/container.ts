@@ -43,6 +43,7 @@ import { DrizzleExchangeRateProvider } from './infrastructure/persistance/reposi
 import { DrizzleLotRepository } from './infrastructure/persistance/repositories/DrizzleLotRepository';
 import { DrizzleSalesOrderRepository } from './infrastructure/persistance/repositories/DrizzleSalesOrderRepository';
 import { DrizzleInvoiceRepository } from './infrastructure/persistance/repositories/DrizzleInvoiceRepository';
+import { DrizzleReservationRepository } from './infrastructure/persistance/repositories/DrizzleReservationRepository';
 import {
   CreatePriceListHandler,
   AddEntryHandler,
@@ -84,6 +85,14 @@ import {
   GetInvoiceHandler,
   ListInvoicesHandler,
 } from './application/handlers/SalesOrderHandlers';
+import {
+  CreateReservationHandler,
+  ReleaseReservationHandler,
+  CommitReservationHandler,
+  GetReservationHandler,
+  ListReservationsHandler,
+} from './application/handlers/ReservationHandlers';
+import { ReservationService } from './application/services/ReservationService';
 import type { InventoryDb } from './infrastructure/persistance/db';
 
 export type InventoryContainerConfig = {
@@ -113,6 +122,7 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const lotRepo = new DrizzleLotRepository(db);
   const orderRepo = new DrizzleSalesOrderRepository(db);
   const invoiceRepo = new DrizzleInvoiceRepository(db);
+  const reservationRepo = new DrizzleReservationRepository(db);
 
   // Services
   const projection = new StockProjectionServiceImpl(uow, inventoryLevels);
@@ -121,6 +131,14 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const fefoStrategy = new FefoDispatchStrategy();
   const lotExpiryService = new LotExpiryService(lotRepo);
   const orderPricing = new SalesOrderPricingService(pricingCalculator);
+  const reservationService = new ReservationService(
+    uow,
+    reservationRepo,
+    lotRepo,
+    inventoryLevels,
+    fefoStrategy,
+    clock,
+  );
 
   const commands = {
     // Product
@@ -154,15 +172,19 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     createOrder: new CreateOrderHandler(orderRepo),
     addOrderLine: new AddOrderLineHandler(orderRepo, orderPricing),
     removeOrderLine: new RemoveOrderLineHandler(orderRepo),
-    confirmOrder: new ConfirmOrderHandler(orderRepo),
+    confirmOrder: new ConfirmOrderHandler(orderRepo, reservationService),
     fulfillOrder: new FulfillOrderHandler(orderRepo),
-    cancelOrder: new CancelOrderHandler(orderRepo),
+    cancelOrder: new CancelOrderHandler(orderRepo, reservationService, reservationRepo),
     // Invoices
     createInvoiceFromOrder: new CreateInvoiceFromOrderHandler(orderRepo, invoiceRepo),
     issueInvoice: new IssueInvoiceHandler(invoiceRepo),
-    recordPayment: new RecordPaymentHandler(invoiceRepo),
+    recordPayment: new RecordPaymentHandler(invoiceRepo, reservationService, reservationRepo),
     voidInvoice: new VoidInvoiceHandler(invoiceRepo),
     closeInvoice: new CloseInvoiceHandler(invoiceRepo),
+    // Reservations (Faz 6)
+    createReservation: new CreateReservationHandler(reservationService),
+    releaseReservation: new ReleaseReservationHandler(reservationService),
+    commitReservation: new CommitReservationHandler(reservationService),
   } as const;
 
   const queries = {
@@ -187,14 +209,17 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     listOrders: new ListOrdersHandler(orderRepo),
     getInvoice: new GetInvoiceHandler(invoiceRepo),
     listInvoices: new ListInvoicesHandler(invoiceRepo),
+    // Reservations (Faz 6)
+    getReservation: new GetReservationHandler(reservationRepo),
+    listReservations: new ListReservationsHandler(reservationRepo),
   } as const;
 
   return {
     config,
     adapters: { clock, uuid, eventBus, outboxPublisher },
-    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService, orderPricing },
+    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService, orderPricing, reservationService },
     uow,
-    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo, orderRepo, invoiceRepo },
+    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo, orderRepo, invoiceRepo, reservationRepo },
     commands,
     queries,
   };

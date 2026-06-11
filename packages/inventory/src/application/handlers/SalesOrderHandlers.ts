@@ -130,13 +130,46 @@ export class RemoveOrderLineHandler {
 }
 
 export class ConfirmOrderHandler {
-  constructor(private readonly repo: SalesOrderRepository) {}
-  async execute(orderId: string): Promise<void> {
+  constructor(
+    private readonly repo: SalesOrderRepository,
+    private readonly reservationService?: import('../services/ReservationService').ReservationService,
+  ) {}
+  async execute(orderId: string): Promise<{ reservationId?: string }> {
     const order = await this.repo.findById(SalesOrderId.of(orderId));
     if (!order) throw new Error(`Order not found: ${orderId}`);
     order.confirm();
     await this.repo.save(order);
     void order.pullDomainEvents();
+
+    // Faz 6: Order confirm edildiğinde otomatik reservation oluştur
+    if (this.reservationService) {
+      // Her line için aynı lokasyonu varsay (MVP); daha sonra routing
+      // stratejisi ile farklı lokasyonlara yönlendirilebilir.
+      const lines = order.getLines().map((ol) => ({
+        productId: ol.getProductId(),
+        locationId: 'MAIN', // MVP: default location
+        lotId: null,
+        quantity: ol.getQuantity(),
+        uom: ol.getUom(),
+      }));
+      const result = await this.reservationService.createReservation({
+        id: `res_${orderId}_${Date.now()}`,
+        orderId,
+        customerId: order.getCustomer().getCustomerId(),
+        lines,
+        notes: `Auto-reservation for order ${order.getOrderNumber()}`,
+      });
+      if (!result.ok) {
+        // Stok yetersizse order'ı geri al — MVP: hata fırlat
+        throw new Error(
+          `Reservation failed: ${result.error}${result.unallocatedQuantity ? ` (unallocated: ${result.unallocatedQuantity})` : ''}`,
+        );
+      }
+      return result.reservation?.id !== undefined
+        ? { reservationId: result.reservation.id }
+        : {};
+    }
+    return {};
   }
 }
 
@@ -152,13 +185,31 @@ export class FulfillOrderHandler {
 }
 
 export class CancelOrderHandler {
-  constructor(private readonly repo: SalesOrderRepository) {}
+  constructor(
+    private readonly repo: SalesOrderRepository,
+    private readonly reservationService?: import('../services/ReservationService').ReservationService,
+    private readonly reservationRepo?: import('../ports/ReservationRepositoryPort').ReservationRepository,
+  ) {}
   async execute(orderId: string, reason: string | null = null): Promise<void> {
     const order = await this.repo.findById(SalesOrderId.of(orderId));
     if (!order) throw new Error(`Order not found: ${orderId}`);
     order.cancel(reason);
     await this.repo.save(order);
     void order.pullDomainEvents();
+
+    // Faz 6: Order iptal edilirse varsa reservation'ı release et
+    if (this.reservationService && this.reservationRepo) {
+      const reservation = await this.reservationRepo.findByOrderId(orderId);
+      if (
+        reservation &&
+        reservation.getStatus().getKind() === 'HELD'
+      ) {
+        await this.reservationService.releaseReservation({
+          reservationId: reservation.getId().getValue(),
+          reason: `order_cancelled:${reason ?? 'no_reason'}`,
+        });
+      }
+    }
   }
 }
 
@@ -238,7 +289,11 @@ export class IssueInvoiceHandler {
 }
 
 export class RecordPaymentHandler {
-  constructor(private readonly repo: InvoiceRepository) {}
+  constructor(
+    private readonly repo: InvoiceRepository,
+    private readonly reservationService?: import('../services/ReservationService').ReservationService,
+    private readonly reservationRepo?: import('../ports/ReservationRepositoryPort').ReservationRepository,
+  ) {}
   async execute(opts: {
     id: string;
     invoiceId: string;
@@ -249,6 +304,7 @@ export class RecordPaymentHandler {
   }): Promise<void> {
     const found = await this.repo.findById(InvoiceId.of(opts.invoiceId));
     if (!found) throw new Error(`Invoice not found: ${opts.invoiceId}`);
+    const wasFullyPaidBefore = found.invoice.isFullyPaid();
     found.invoice.recordPayment({
       id: opts.id,
       amount: Money.of(opts.amount, opts.currencyCode),
@@ -257,6 +313,23 @@ export class RecordPaymentHandler {
     });
     await this.repo.save(found.invoice, found.invoice.getPayments());
     void found.invoice.pullDomainEvents();
+
+    // Faz 6: Invoice tamamen ödendiyse, bağlı reservation'ı commit et
+    if (
+      !wasFullyPaidBefore &&
+      found.invoice.isFullyPaid() &&
+      this.reservationService &&
+      this.reservationRepo
+    ) {
+      const reservation = await this.reservationRepo.findByOrderId(
+        found.invoice.getSalesOrderId(),
+      );
+      if (reservation && reservation.getStatus().getKind() === 'HELD') {
+        await this.reservationService.commitReservation({
+          reservationId: reservation.getId().getValue(),
+        });
+      }
+    }
   }
 }
 

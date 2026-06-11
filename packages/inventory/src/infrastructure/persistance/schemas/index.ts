@@ -19,3 +19,10 @@ export type { InvInventoryLevelRow, InvInventoryLevelInsert } from './inv.invent
 export { priceLists, priceListEntries, exchangeRates } from './inv.price-list.schema';
 export { lots, lotSerials } from './inv.lot.schema';
 export { salesOrders, orderLines, invoices, invoiceLines, invoicePayments } from './inv.sales-order.schema';
+export { reservations, reservationLines } from './inv.reservation.schema';
+export type {
+  InvReservationRow,
+  InvReservationInsert,
+  InvReservationLineRow,
+  InvReservationLineInsert,
+} from './inv.reservation.schema';

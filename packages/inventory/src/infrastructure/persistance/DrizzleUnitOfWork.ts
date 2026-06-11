@@ -5,6 +5,7 @@ import type {
 import { DrizzleInventoryLevelRepository } from './repositories/DrizzleInventoryLevelRepository';
 import { DrizzleOutbox } from './DrizzleOutbox';
 import { DrizzleProductRepository } from './repositories/DrizzleProductRepository';
+import { DrizzleReservationRepository } from './repositories/DrizzleReservationRepository';
 import { DrizzleStockMovementRepository } from './repositories/DrizzleStockMovementRepository';
 import type { InventoryDb, InventoryDbClient } from './db';
 
@@ -13,6 +14,7 @@ function buildContext(client: InventoryDbClient): UnitOfWorkContext {
     products: new DrizzleProductRepository(client),
     stockMovements: new DrizzleStockMovementRepository(client),
     inventoryLevels: new DrizzleInventoryLevelRepository(client),
+    reservations: new DrizzleReservationRepository(client),
     outbox: new DrizzleOutbox(client),
   };
 }

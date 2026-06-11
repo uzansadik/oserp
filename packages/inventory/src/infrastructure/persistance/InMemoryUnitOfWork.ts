@@ -5,6 +5,7 @@ import type {
 import { InMemoryInventoryLevelRepository } from './repositories/InMemoryInventoryLevelRepository';
 import { InMemoryOutbox } from './InMemoryOutbox';
 import { InMemoryProductRepository } from './repositories/InMemoryProductRepository';
+import { InMemoryReservationRepository } from './repositories/InMemoryReservationRepository';
 import { InMemoryStockMovementRepository } from './repositories/InMemoryStockMovementRepository';
 
 /**
@@ -16,12 +17,14 @@ export class InMemoryUnitOfWork implements UnitOfWorkPort {
   public readonly products: InMemoryProductRepository;
   public readonly stockMovements: InMemoryStockMovementRepository;
   public readonly inventoryLevels: InMemoryInventoryLevelRepository;
+  public readonly reservations: InMemoryReservationRepository;
   public readonly outbox: InMemoryOutbox;
 
   constructor() {
     this.products = new InMemoryProductRepository();
     this.stockMovements = new InMemoryStockMovementRepository();
     this.inventoryLevels = new InMemoryInventoryLevelRepository();
+    this.reservations = new InMemoryReservationRepository();
     this.outbox = new InMemoryOutbox();
   }
 
@@ -30,6 +33,7 @@ export class InMemoryUnitOfWork implements UnitOfWorkPort {
       products: this.products,
       stockMovements: this.stockMovements,
       inventoryLevels: this.inventoryLevels,
+      reservations: this.reservations,
       outbox: this.outbox,
     });
   }

@@ -21,6 +21,6 @@ export class ValuationSnapshot {
   equals(other: ValuationSnapshot): boolean {
     if (this.totalValue === null && other.totalValue === null) return true;
     if (this.totalValue === null || other.totalValue === null) return false;
-    return Money.equals(this.totalValue, other.totalValue);
+    return this.totalValue.equals(other.totalValue);
   }
 }

@@ -99,7 +99,7 @@ export class GetStockValuationHandler
 
     // Toplam onHand + totalValue hesapla
     let totalOnHand = '0';
-    const currency = (levels[0]?.getValuation().getTotalValue()?.currency) ?? 'TRY';
+    const currency = (levels[0]?.getValuation().getTotalValue()?.getCurrency().getCode()) ?? 'TRY';
     let totalValue = '0';
 
     return {

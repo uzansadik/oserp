@@ -1,108 +1,104 @@
 /**
- * Money — Tutar + para birimi value object (immutable).
+ * Money Value Object
  *
- * Decimal hassasiyet için içerde `bigint` tutulur; `scale` ondalık hane
- * sayısıdır (default 6, ERP standardı). Dışarıya string olarak verilir
- * (Drizzle `numeric` zaten string döner).
+ * Decimal-safe money representation: (amount: number, currency: Currency).
+ * All arithmetic via integer minor units to avoid float drift (e.g. 0.1+0.2
+ * problem). For display, use fromMinorUnits() to get the decimal value.
  *
- * Örnek: amount="123.450000" → 123_450_000n
+ * Examples:
+ *   Money.of(99.99, "USD") -> 9999 cents
+ *   Money.zero("USD") -> 0 cents
+ *   a.add(b) -> new Money with combined cents
+ *   a.multiply(0.20) -> a * 20% (tax)
  */
+import { Currency } from './Currency';
+
 export class Money {
-  private readonly _amount: bigint;
-  private readonly _currency: string;
-  private readonly _scale: number;
-
-  private constructor(amount: bigint, currency: string, scale: number) {
-    this._amount = amount;
-    this._currency = currency;
-    this._scale = scale;
+  private constructor(
+    private readonly minorUnits: number,
+    private readonly currency: Currency,
+  ) {
+    Object.freeze(this);
   }
 
-  /** Tutarı string olarak alır (örn: "123.45"), ISO 4217 currency. */
-  static create(amount: string, currency: string, scale = 6): Money {
-    if (!/^-?\d+(\.\d+)?$/.test(amount)) {
-      throw new Error(`Invalid amount: ${amount}`);
+  static of(amount: number, currencyCode: string): Money {
+    return new Money(Currency.of(currencyCode).toMinorUnits(amount), Currency.of(currencyCode));
+  }
+
+  static ofMinor(minor: number, currency: Currency): Money {
+    if (!Number.isInteger(minor)) {
+      throw new Error(`Minor units must be integer: ${minor}`);
     }
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      throw new Error(`Invalid currency (ISO 4217): ${currency}`);
-    }
-    const negative = amount.startsWith('-');
-    const abs = negative ? amount.slice(1) : amount;
-    const parts = abs.split('.');
-    const intPart = parts[0] ?? '0';
-    const decPart = parts[1] ?? '';
-    if (decPart.length > scale) {
-      throw new Error(`Scale overflow: max ${scale} decimals`);
-    }
-    const padded = decPart.padEnd(scale, '0');
-    const big = BigInt(`${intPart}${padded}`);
-    return new Money(negative ? -big : big, currency, scale);
+    return new Money(minor, currency);
   }
 
-  static zero(currency: string, scale = 6): Money {
-    return new Money(0n, currency, scale);
+  static zero(currencyCode: string): Money {
+    return new Money(0, Currency.of(currencyCode));
   }
 
-  get amount(): bigint {
-    return this._amount;
+  getCurrency(): Currency {
+    return this.currency;
   }
 
-  get currency(): string {
-    return this._currency;
+  getMinorUnits(): number {
+    return this.minorUnits;
   }
 
-  get scale(): number {
-    return this._scale;
-  }
-
-  /** "123.450000" formatında string (DB'ye yazım için). */
-  toString(): string {
-    const negative = this._amount < 0n;
-    const abs = negative ? -this._amount : this._amount;
-    const s = abs.toString().padStart(this._scale + 1, '0');
-    const intPart = s.slice(0, s.length - this._scale) || '0';
-    const decPart = s.slice(s.length - this._scale);
-    return `${negative ? '-' : ''}${intPart}.${decPart}`;
-  }
-
-  get value(): string {
-    return this.toString();
-  }
-
-  static equals(a: Money, b: Money): boolean {
-    return a._amount === b._amount && a._currency === b._currency;
+  getAmount(): number {
+    return this.currency.fromMinorUnits(this.minorUnits);
   }
 
   add(other: Money): Money {
-    this.assertSameCurrency(other);
-    return new Money(this._amount + other._amount, this._currency, this._scale);
+    if (!this.currency.equals(other.currency)) {
+      throw new Error(`Currency mismatch: ${this.currency} vs ${other.currency}`);
+    }
+    return new Money(this.minorUnits + other.minorUnits, this.currency);
   }
 
   subtract(other: Money): Money {
-    this.assertSameCurrency(other);
-    return new Money(this._amount - other._amount, this._currency, this._scale);
+    if (!this.currency.equals(other.currency)) {
+      throw new Error(`Currency mismatch: ${this.currency} vs ${other.currency}`);
+    }
+    return new Money(this.minorUnits - other.minorUnits, this.currency);
   }
 
   multiply(factor: number): Money {
-    if (Number.isNaN(factor) || !Number.isFinite(factor)) {
-      throw new Error(`Invalid factor: ${factor}`);
-    }
-    const big = BigInt(Math.round(factor * 10 ** this._scale));
-    const product = (this._amount * big) / 10n ** BigInt(this._scale);
-    return new Money(product, this._currency, this._scale);
+    // Round half-up
+    return new Money(Math.round(this.minorUnits * factor), this.currency);
   }
 
-  isNegative(): boolean {
-    return this._amount < 0n;
+  /**
+   * Apply a percentage (0-100) and return the amount.
+   *   Money.of(100, "USD").percentage(20) -> 20 USD
+   */
+  percentage(percent: number): Money {
+    if (percent < 0 || percent > 100) {
+      throw new Error(`Percentage out of range: ${percent}`);
+    }
+    return this.multiply(percent / 100);
   }
 
   isZero(): boolean {
-    return this._amount === 0n;
+    return this.minorUnits === 0;
   }
 
-  private assertSameCurrency(other: Money): void {
-    if (this._currency !== other._currency) {
-      throw new Error(`Currency mismatch: ${this._currency} vs ${other._currency}`);
+  isNegative(): boolean {
+    return this.minorUnits < 0;
+  }
+
+  equals(other: Money): boolean {
+    if (!(other instanceof Money)) return false;
+    return this.minorUnits === other.minorUnits && this.currency.equals(other.currency);
+  }
+
+  compareTo(other: Money): number {
+    if (!this.currency.equals(other.currency)) {
+      throw new Error(`Currency mismatch: ${this.currency} vs ${other.currency}`);
     }
+    return this.minorUnits - other.minorUnits;
+  }
+
+  toString(): string {
+    return `${this.getAmount().toFixed(this.currency.getMinorUnit() > 0 ? 2 : 0)} ${this.currency}`;
   }
 }

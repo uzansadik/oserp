@@ -18,3 +18,4 @@ export { invInventoryLevels } from './inv.inventory-level.schema';
 export type { InvInventoryLevelRow, InvInventoryLevelInsert } from './inv.inventory-level.schema';
 export { priceLists, priceListEntries, exchangeRates } from './inv.price-list.schema';
 export { lots, lotSerials } from './inv.lot.schema';
+export { salesOrders, orderLines, invoices, invoiceLines, invoicePayments } from './inv.sales-order.schema';

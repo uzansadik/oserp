@@ -41,6 +41,8 @@ import { DrizzleInventoryLevelRepository } from './infrastructure/persistance/re
 import { DrizzlePriceListRepository } from './infrastructure/persistance/repositories/DrizzlePriceListRepository';
 import { DrizzleExchangeRateProvider } from './infrastructure/persistance/repositories/DrizzleExchangeRateProvider';
 import { DrizzleLotRepository } from './infrastructure/persistance/repositories/DrizzleLotRepository';
+import { DrizzleSalesOrderRepository } from './infrastructure/persistance/repositories/DrizzleSalesOrderRepository';
+import { DrizzleInvoiceRepository } from './infrastructure/persistance/repositories/DrizzleInvoiceRepository';
 import {
   CreatePriceListHandler,
   AddEntryHandler,
@@ -63,7 +65,25 @@ import {
 } from './application/handlers/LotHandlers';
 import { FefoDispatchStrategy } from './application/services/FefoDispatchStrategy';
 import { LotExpiryService } from './application/services/LotExpiryService';
+import { SalesOrderPricingService } from './application/services/SalesOrderPricingService';
 import { PricingCalculatorImpl } from './application/services/PricingCalculatorImpl';
+import {
+  CreateOrderHandler,
+  AddOrderLineHandler,
+  RemoveOrderLineHandler,
+  ConfirmOrderHandler,
+  FulfillOrderHandler,
+  CancelOrderHandler,
+  GetOrderHandler,
+  ListOrdersHandler,
+  CreateInvoiceFromOrderHandler,
+  IssueInvoiceHandler,
+  RecordPaymentHandler,
+  VoidInvoiceHandler,
+  CloseInvoiceHandler,
+  GetInvoiceHandler,
+  ListInvoicesHandler,
+} from './application/handlers/SalesOrderHandlers';
 import type { InventoryDb } from './infrastructure/persistance/db';
 
 export type InventoryContainerConfig = {
@@ -91,6 +111,8 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const priceLists = new DrizzlePriceListRepository(db);
   const exchangeRateProvider = new DrizzleExchangeRateProvider(db);
   const lotRepo = new DrizzleLotRepository(db);
+  const orderRepo = new DrizzleSalesOrderRepository(db);
+  const invoiceRepo = new DrizzleInvoiceRepository(db);
 
   // Services
   const projection = new StockProjectionServiceImpl(uow, inventoryLevels);
@@ -98,6 +120,7 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const pricingCalculator = new PricingCalculatorImpl(priceLists, exchangeRateProvider);
   const fefoStrategy = new FefoDispatchStrategy();
   const lotExpiryService = new LotExpiryService(lotRepo);
+  const orderPricing = new SalesOrderPricingService(pricingCalculator);
 
   const commands = {
     // Product
@@ -127,6 +150,19 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     expireLots: new ExpireLotsHandler(lotRepo),
     quarantineLot: new QuarantineLotHandler(lotRepo),
     allocateSerials: new AllocateSerialsHandler(lotRepo),
+    // Sales
+    createOrder: new CreateOrderHandler(orderRepo),
+    addOrderLine: new AddOrderLineHandler(orderRepo, orderPricing),
+    removeOrderLine: new RemoveOrderLineHandler(orderRepo),
+    confirmOrder: new ConfirmOrderHandler(orderRepo),
+    fulfillOrder: new FulfillOrderHandler(orderRepo),
+    cancelOrder: new CancelOrderHandler(orderRepo),
+    // Invoices
+    createInvoiceFromOrder: new CreateInvoiceFromOrderHandler(orderRepo, invoiceRepo),
+    issueInvoice: new IssueInvoiceHandler(invoiceRepo),
+    recordPayment: new RecordPaymentHandler(invoiceRepo),
+    voidInvoice: new VoidInvoiceHandler(invoiceRepo),
+    closeInvoice: new CloseInvoiceHandler(invoiceRepo),
   } as const;
 
   const queries = {
@@ -146,14 +182,19 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     // Lots
     getLotAggregate: new GetLotAggregateHandler(lotRepo),
     listLots: new ListLotsHandler(lotRepo),
+    // Sales + Invoices
+    getOrder: new GetOrderHandler(orderRepo),
+    listOrders: new ListOrdersHandler(orderRepo),
+    getInvoice: new GetInvoiceHandler(invoiceRepo),
+    listInvoices: new ListInvoicesHandler(invoiceRepo),
   } as const;
 
   return {
     config,
     adapters: { clock, uuid, eventBus, outboxPublisher },
-    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService },
+    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService, orderPricing },
     uow,
-    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo },
+    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo, orderRepo, invoiceRepo },
     commands,
     queries,
   };

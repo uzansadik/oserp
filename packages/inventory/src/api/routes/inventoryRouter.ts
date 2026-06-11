@@ -4,6 +4,7 @@ import { registerProductRoutes } from './productRoutes';
 import { registerStockRoutes } from './stockRoutes';
 import { registerPriceListRoutes } from './priceListRoutes';
 import { registerLotRoutes } from './lotRoutes';
+import { registerSalesRoutes } from './salesRoutes';
 
 /**
  * Fastify plugin: tüm inventory route'larını mount eder.
@@ -17,4 +18,5 @@ export async function inventoryRouter(
   await registerStockRoutes(app, opts.container);
   await registerPriceListRoutes(app, opts.container);
   await registerLotRoutes(app, opts.container);
+  await registerSalesRoutes(app, opts.container);
 }

@@ -8,15 +8,15 @@ export class PermissionModule {
       throw new Error('Permission module cannot be empty');
     }
 
-    if (normalized.length < 2) {
+    if (normalized !== '*' && normalized.length < 2) {
       throw new Error('Permission module is too short');
     }
 
-    if (normalized.length > 50) {
+    if (normalized !== '*' && normalized.length > 50) {
       throw new Error('Permission module is too long');
     }
 
-    if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
+    if (!/^[a-z][a-z0-9_]*$/.test(normalized) && normalized !== '*') {
       throw new Error(
         'Permission module must start with a letter and contain only lowercase letters, numbers or underscore',
       );

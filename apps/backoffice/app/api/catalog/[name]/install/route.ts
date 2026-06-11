@@ -13,6 +13,7 @@ type InstallBody = {
   tag?: unknown;
   env?: unknown;
   envByService?: unknown;
+  systemUser?: unknown;
 };
 
 export async function POST(request: Request, { params }: RouteContext) {
@@ -36,6 +37,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const tag = typeof body.tag === 'string' && body.tag.length > 0 ? body.tag : undefined;
   const envByService = mergeEnvByService(name, body);
+  const systemUser = parseSystemUser(name, body.systemUser);
 
   try {
     const orchestrator = await InstallOrchestrator.create();
@@ -43,6 +45,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       target: name,
       ...(tag ? { tag } : {}),
       ...(envByService ? { envByService } : {}),
+      ...(systemUser ? { systemUser } : {}),
       actorEmail: admin.email,
     });
     return NextResponse.json({ ok: true, report });
@@ -50,6 +53,46 @@ export async function POST(request: Request, { params }: RouteContext) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 502 });
   }
+}
+
+type SystemUserPayload = {
+  name: string;
+  surname: string;
+  email: string;
+  username: string;
+  password: string;
+};
+
+function parseSystemUser(
+  target: string,
+  raw: unknown,
+): SystemUserPayload | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (target !== 'iam') return undefined; // sadece iam icin anlamli
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('systemUser bir obje olmali');
+  }
+  const obj = raw as Record<string, unknown>;
+  const fields: Array<keyof SystemUserPayload> = [
+    'name',
+    'surname',
+    'email',
+    'username',
+    'password',
+  ];
+  for (const k of fields) {
+    const v = obj[k];
+    if (typeof v !== 'string' || v.length === 0) {
+      throw new Error(`systemUser.${k} zorunlu ve string olmali`);
+    }
+  }
+  return {
+    name: String(obj.name),
+    surname: String(obj.surname),
+    email: String(obj.email),
+    username: String(obj.username),
+    password: String(obj.password),
+  };
 }
 
 function mergeEnvByService(target: string, body: InstallBody): Record<string, Record<string, string>> | undefined {

@@ -26,6 +26,17 @@ export function registerUserRoutes(app: FastifyInstance, container: IamContainer
     },
   );
 
+  /**
+   * Sistem bootstrap endpoint — auth gerektirmez, sadece bos DB iken calisir.
+   * Backoffice IAM kurulumu sirasinda cagirir; koruma yalnizca DB guard'ina
+   * (users.count() === 0) dayanir. Internal docker network'un disindan bu
+   * endpoint'e ulasilamamalidir (compose'da expose yok).
+   */
+  app.post('/users/bootstrap-register', async (request, reply) => {
+    const input = registerUserSchema.parse(request.body);
+    await sendResult(reply, await controller.bootstrap(input));
+  });
+
   app.get(
     '/users',
     { preHandler: [authenticate, createAuthorize(container, IamPermissions.userList)] },

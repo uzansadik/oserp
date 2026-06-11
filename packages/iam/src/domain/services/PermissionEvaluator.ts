@@ -21,6 +21,13 @@ export class PermissionEvaluator {
       return true;
     }
 
+    // Wildcard: kullanıcının herhangi bir granted kodu "*" içeriyorsa
+    // tüm permission'lara otomatik sahiptir. "Sales/Catalog ileride eklendi"
+    // senaryosunda sistem kullanıcısı yeni permission'ları da miras alır.
+    if (this.granted.has('*')) {
+      return true;
+    }
+
     const [module, resource, action] = required.split('.');
     if (!module || !resource || !action) {
       return false;

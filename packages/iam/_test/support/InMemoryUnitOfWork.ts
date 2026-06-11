@@ -60,6 +60,9 @@ class InMemoryUserRepository implements UserRepositoryPort {
   async existsByUsername(username: { value: string }): Promise<boolean> {
     return (await this.findByUsername(username)) !== null;
   }
+  async count(): Promise<number> {
+    return this.store.size;
+  }
   async findAll(): Promise<User[]> {
     return [...this.store.values()];
   }

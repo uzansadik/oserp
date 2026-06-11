@@ -15,6 +15,14 @@ import { DockerService } from './docker';
 import { EdgeManager, isEdgeEnabled } from './edge';
 import { type BackofficeContext, getContext } from './index';
 
+export type SystemUserPayload = {
+  name: string;
+  surname: string;
+  email: string;
+  username: string;
+  password: string;
+};
+
 export type InstallInput = {
   /** Hedef servis adi (catalog.key). */
   target: string;
@@ -22,6 +30,12 @@ export type InstallInput = {
   tag?: string;
   /** Servis bazinda kullanici tarafindan saglanan env'ler: { [serviceName]: { KEY: VALUE } } */
   envByService?: Record<string, Record<string, string>>;
+  /**
+   * IAM servisine seed edilecek sistem kullanici bilgileri. Sadece `target === 'iam'`
+   * veya bağımlılık zincirinde iam varsa anlamlı; aksi halde yok sayılır.
+   * `iam` post-install'ındaki `seed-system-user` step'i tarafından kullanılır.
+   */
+  systemUser?: SystemUserPayload;
   /** Iz dusumu (audit). */
   actorEmail: string;
 };
@@ -39,6 +53,13 @@ export type InstallReport = {
 };
 
 export class InstallOrchestrator {
+  /**
+   * `install()` method'u baslangicinda `InstallInput.systemUser`'dan set edilir;
+   * `seed-system-user` post-install step'inde HTTP POST body'si olarak kullanilir.
+   * Tek seferlik state — her install cagirildiginda yeniden set edilir.
+   */
+  private systemUser: SystemUserPayload | undefined;
+
   constructor(
     private readonly ctx: BackofficeContext,
     private readonly docker: DockerService,
@@ -49,6 +70,7 @@ export class InstallOrchestrator {
   }
 
   async install(input: InstallInput): Promise<InstallReport> {
+    this.systemUser = input.systemUser;
     const order = resolveInstallOrder(input.target);
     await this.docker.ensureNetwork(NETWORK_NAME);
 
@@ -206,6 +228,24 @@ export class InstallOrchestrator {
     serviceEnv: Record<string, string>,
     actorEmail: string,
   ): Promise<{ kind: string; exitCode: number; logsTail: string }> {
+    switch (step.kind) {
+      case 'migrate':
+        return this.runMigrateStep(serviceName, step, serviceEnv, actorEmail);
+      case 'seed-system-user':
+        return this.runSeedSystemUserStep(serviceName, step, actorEmail);
+    }
+  }
+
+  /**
+   * Mevcut davranış: step.image'ı pull et, `runOnce` ile container olarak çalıştır,
+   * çıkış kodunu bekle, logları tail'le. Hata → kurulum başarısız sayılır.
+   */
+  private async runMigrateStep(
+    serviceName: string,
+    step: Extract<PostInstallStep, { kind: 'migrate' }>,
+    serviceEnv: Record<string, string>,
+    actorEmail: string,
+  ): Promise<{ kind: string; exitCode: number; logsTail: string }> {
     const env =
       step.envFromService === serviceName
         ? serviceEnv
@@ -229,6 +269,79 @@ export class InstallOrchestrator {
     if (exitCode !== 0) {
       throw new Error(
         `Post-install ${step.kind} basarisiz (exit ${exitCode}). Loglar: ${logsTail.slice(-500)}`,
+      );
+    }
+    return { kind: step.kind, exitCode, logsTail };
+  }
+
+  /**
+   * Sistem kullanıcısı seed: ayakta olan `iam` container'ına internal DNS
+   * üzerinden HTTP POST yapar. Yeni container başlatmaz, log'lar response body'den okunur.
+   *
+   * Hata durumları:
+   *  - `systemUser` payload verilmemiş → anlamlı hata (UI seviyesinde zorunlu olmalı).
+   *  - IAM henüz ayağa kalkmamışsa network DNS hata verir (uygun mesajla yakalanır).
+   *  - 4xx/5xx response → response body `logsTail` olarak kaydedilir, kurulum başarısız.
+   */
+  private async runSeedSystemUserStep(
+    serviceName: string,
+    step: Extract<PostInstallStep, { kind: 'seed-system-user' }>,
+    actorEmail: string,
+  ): Promise<{ kind: string; exitCode: number; logsTail: string }> {
+    if (!this.systemUser) {
+      const message =
+        'seed-system-user step icin systemUser payload zorunlu (InstallInput.systemUser).';
+      await this.ctx.services.recordEvent({
+        serviceName,
+        kind: 'post_install_seed-system-user',
+        payloadJson: JSON.stringify({ by: actorEmail, exitCode: 1, logs: message }),
+      });
+      throw new Error(message);
+    }
+
+    const url = `http://${step.targetService}:${step.targetPort}${step.endpointPath}`;
+    const start = Date.now();
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.systemUser),
+        // IAM'in migrate'i arkasindan hemen ayakta olmali; 10s yeterli.
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err) {
+      const message = `IAM bootstrap endpoint'ine ulasilamadi (${url}): ${
+        err instanceof Error ? err.message : String(err)
+      }`;
+      await this.ctx.services.recordEvent({
+        serviceName,
+        kind: 'post_install_seed-system-user',
+        payloadJson: JSON.stringify({ by: actorEmail, exitCode: -1, logs: message }),
+      });
+      throw new Error(message);
+    }
+
+    const elapsedMs = Date.now() - start;
+    const responseBody = (await response.text().catch(() => '')) || '';
+    const exitCode = response.ok ? 0 : response.status;
+    const logsTail = `[${response.status} in ${elapsedMs}ms] ${responseBody}`.slice(-4000);
+
+    await this.ctx.services.recordEvent({
+      serviceName,
+      kind: 'post_install_seed-system-user',
+      payloadJson: JSON.stringify({
+        by: actorEmail,
+        exitCode,
+        logs: logsTail,
+        status: response.status,
+        url,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Post-install seed-system-user basarisiz (HTTP ${response.status}). Yanit: ${responseBody.slice(-500)}`,
       );
     }
     return { kind: step.kind, exitCode, logsTail };

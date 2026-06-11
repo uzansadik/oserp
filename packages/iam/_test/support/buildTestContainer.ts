@@ -29,6 +29,7 @@ import {
   ListRolesHandler,
 } from '@oserp-community/iam/application/handlers/RoleQueryHandlers';
 import {
+  BootstrapRegisterUserHandler,
   ChangePasswordHandler,
   ChangeUserStatusHandler,
   RegisterUserHandler,
@@ -65,6 +66,7 @@ export function buildTestContainer(): { container: IamContainer; uow: InMemoryUn
   const tokenService = new JwtTokenService({ secret: TEST_JWT_SECRET });
   const clock = new FixedClock(new Date());
 
+  const getEffectivePermissions = new GetEffectivePermissionsHandler(uow.memberships, uow.roles);
   const commands = {
     registerUser: new RegisterUserHandler(uow, passwordHasher),
     changePassword: new ChangePasswordHandler(uow, passwordHasher),
@@ -80,15 +82,32 @@ export function buildTestContainer(): { container: IamContainer; uow: InMemoryUn
     assignRoleToMember: new AssignRoleToMemberHandler(uow),
     revokeRoleFromMember: new RevokeRoleFromMemberHandler(uow),
     suspendMembership: new SuspendMembershipHandler(uow),
-    login: new LoginHandler(uow, passwordHasher, refreshTokenHasher, tokenService, clock),
-    refreshSession: new RefreshSessionHandler(uow, refreshTokenHasher, tokenService, clock),
+    login: new LoginHandler(
+      uow,
+      passwordHasher,
+      refreshTokenHasher,
+      tokenService,
+      clock,
+      getEffectivePermissions,
+      {},
+    ),
+    refreshSession: new RefreshSessionHandler(
+      uow,
+      refreshTokenHasher,
+      tokenService,
+      clock,
+      getEffectivePermissions,
+      {},
+    ),
     logout: new LogoutHandler(uow, refreshTokenHasher),
     issueApiCredential: new IssueApiCredentialHandler(uow, apiKeySecretHasher),
     rotateApiCredential: new RotateApiCredentialHandler(uow, apiKeySecretHasher),
     revokeApiCredential: new RevokeApiCredentialHandler(uow),
+    bootstrapRegisterUser: new BootstrapRegisterUserHandler(uow, passwordHasher, {
+      defaultCompanyId: '00000000-0000-4000-8000-000000000001',
+    }),
   };
 
-  const getEffectivePermissions = new GetEffectivePermissionsHandler(uow.memberships, uow.roles);
   const queries = {
     getUserById: new GetUserByIdHandler(uow.users),
     getUserByEmail: new GetUserByEmailHandler(uow.users),

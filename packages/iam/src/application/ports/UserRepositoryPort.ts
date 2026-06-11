@@ -16,5 +16,11 @@ export interface UserRepositoryPort {
 
   existsByUsername(username: Username): Promise<boolean>;
 
+  /**
+   * DB'deki kullanici sayisi. Bootstrap guard'i icin kullanilir: sadece
+   * count() === 0 iken ilk sistem kullanicisi seed edilebilir.
+   */
+  count(): Promise<number>;
+
   findAll(): Promise<User[]>;
 }

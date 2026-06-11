@@ -20,6 +20,7 @@ export class PermissionAction {
     'open',
     'archive',
     'restore',
+    '*',
   ]);
 
   private constructor(private readonly value: string) {}
@@ -31,7 +32,7 @@ export class PermissionAction {
       throw new Error('Permission action cannot be empty');
     }
 
-    if (!/^[a-z][a-z0-9_]*$/.test(normalized)) {
+    if (!/^[a-z][a-z0-9_]*$/.test(normalized) && normalized !== '*') {
       throw new Error(
         'Permission action must start with a letter and contain only lowercase letters, numbers or underscore',
       );

@@ -22,7 +22,14 @@ export default function InstallPage() {
     })),
     ports: entry.ports,
     volumes: entry.volumes,
-    postInstall: entry.postInstall.map((s) => ({ kind: s.kind, command: s.command })),
+    postInstall: entry.postInstall.map((s) => ({
+      kind: s.kind,
+      // Sadece migrate step'leri container komutu calistirir; seed-system-user
+      // backoffice'in kendisi HTTP POST yapar. UI tarafinda sadece kind gostermek
+      // yeterli, detaylar orkestrator tarafinda.
+      ...(s.kind === 'migrate' ? { command: s.command } : {}),
+    })),
+    systemUserRequired: entry.name === 'iam',
   }));
 
   return (

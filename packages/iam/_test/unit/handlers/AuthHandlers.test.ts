@@ -22,6 +22,15 @@ const CREDENTIALS = {
   password: 'Abcdef12',
 };
 
+/**
+ * Stub: effective permissions query'sini boş döner. Auth handler'lar
+ * membership bulamayınca sessizce boş array ile devam eder, bu yüzden
+ * testlerde gerçek membership setup'ına gerek kalmaz.
+ */
+const noEffectivePermissions = {
+  execute: async () => ({ userId: '', companyId: '', permissionCodes: [] }),
+};
+
 async function setup() {
   const uow = new InMemoryUnitOfWork();
   const passwordHasher = new FakePasswordHasher();
@@ -32,8 +41,21 @@ async function setup() {
   const { userId } = await new RegisterUserHandler(uow, passwordHasher).execute(CREDENTIALS);
   uow.outbox.events.length = 0;
 
-  const login = new LoginHandler(uow, passwordHasher, refreshHasher, tokenService, clock);
-  const refresh = new RefreshSessionHandler(uow, refreshHasher, tokenService, clock);
+  const login = new LoginHandler(
+    uow,
+    passwordHasher,
+    refreshHasher,
+    tokenService,
+    clock,
+    noEffectivePermissions,
+  );
+  const refresh = new RefreshSessionHandler(
+    uow,
+    refreshHasher,
+    tokenService,
+    clock,
+    noEffectivePermissions,
+  );
   const logout = new LogoutHandler(uow, refreshHasher);
 
   return { uow, userId, clock, login, refresh, logout };

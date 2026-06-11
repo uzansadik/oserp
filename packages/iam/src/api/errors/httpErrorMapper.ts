@@ -1,5 +1,6 @@
 import { ZodError } from 'zod';
 import {
+  BootstrapNotAllowedError,
   ForbiddenError,
   InvalidStateError,
   NotFoundError,
@@ -25,6 +26,7 @@ export type MappedHttpError = {
  * - ZodError / ValidationError → 400
  * - NotFoundError → 404
  * - InvalidStateError → 409
+ * - BootstrapNotAllowedError → 409 (DB dolu — bootstrap sadece bos DB'de)
  * - ForbiddenError → 403
  * - ApiError (örn. UnauthorizedError) → kendi statusCode'u
  * - diğer → 500
@@ -61,6 +63,9 @@ export function mapErrorToHttp(error: unknown): MappedHttpError {
   }
   if (error instanceof ForbiddenError) {
     return errorBody(403, error.code, error.message);
+  }
+  if (error instanceof BootstrapNotAllowedError) {
+    return errorBody(409, error.code, error.message);
   }
 
   const message = error instanceof Error ? error.message : 'Internal server error';

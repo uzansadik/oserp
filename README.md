@@ -17,7 +17,10 @@ sunucuda tek komutla ayağa kaldırılabilir.
 - [Teknolojiler](#teknolojiler)
 - [Hızlı başlangıç (yerel geliştirme)](#hızlı-başlangıç-yerel-geliştirme)
 - [Docker ile kurulum (Ubuntu LTS)](#docker-ile-kurulum-ubuntu-lts)
+  - [İlk kurulum: sistem kullanıcısı (bootstrap)](#ilk-kurulum-sistem-kullanıcısı-bootstrap)
+  - [Geliştirici modu (legacy compose)](#geliştirici-modu-legacy-compose)
 - [Ortam değişkenleri](#ortam-değişkenleri)
+  - [IAM bootstrap ortam değişkenleri](#iam-bootstrap-ortam-değişkenleri)
 - [API uçları](#api-uçları)
 - [Geliştirme komutları](#geliştirme-komutları)
 
@@ -251,6 +254,46 @@ tek tıkla ayağa kaldırın.
 > güvenilen ağlara (VPN/Tailscale/IP allowlist) açın ya da reverse proxy
 > arkasında mTLS/Basic auth ile koruyun. Public IP'ye açmayın.
 
+### İlk kurulum: sistem kullanıcısı (bootstrap)
+
+Backoffice, **Servis Kur** ekranından IAM servisini kurarken bir form ile ilk
+yönetici (sistem kullanıcısı) bilgilerini ister. Kurulum tamamlandığında IAM API'ye
+`POST /iam/users/bootstrap-register` çağrısı yapılır ve bu kullanıcı **tüm
+yetkilerle** (`*.*.*` wildcard permission) seed edilir. Sonraki adımlarda
+backoffice UI üzerinden normal kullanıcılar oluşturulabilir.
+
+Akış:
+
+1. `iam` servisi seçildiğinde ek form açılır: **ad, soyad, e-posta, kullanıcı
+   adı, parola** (aynı kurallar: e-posta format, kullanıcı adı 3-20, parola ≥ 8).
+2. `Kur` butonuna basıldığında:
+   - PostgreSQL + IAM container'ları başlatılır (mevcut akış).
+   - Migration çalışır.
+   - Bootstrap adımı çalışır: kullanıcı + `*.*.*` permission + `super-admin`
+     rolü + membership.
+3. Sistem kullanıcısı, `POST /iam/auth/login` ile giriş yaparak tüm IAM (ve
+   ileride eklenecek tüm context'lerin) API'lerine erişebilir.
+
+**Tek seferlik koruma:** `/iam/users/bootstrap-register` sadece veritabanı
+boşken kabul eder. `iam_users` tablosunda bir kayıt varsa `409
+BOOTSTRAP_NOT_ALLOWED` döner. Endpoint kimlik doğrulaması gerektirmez ama
+internal Docker ağının dışında erişilememelidir (compose'da `expose` yok).
+
+**Örnek curl (legacy compose / debug):**
+
+```bash
+curl -X POST http://localhost:3000/iam/users/bootstrap-register \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Sadık",
+    "surname": "Uzan",
+    "email": "admin@oserp.local",
+    "username": "admin",
+    "password": "ChangeMe123!"
+  }'
+# → 201 { "userId": "...", "membershipId": "...", "permissionCode": "*.*.*" }
+```
+
 ### Geliştirici modu (legacy compose)
 
 Backoffice olmadan yalnızca PostgreSQL + API stack'ini doğrudan compose ile
@@ -282,6 +325,12 @@ Legacy script aynı `REPO_URL`, `BRANCH`, `APP_DIR`, `API_PORT`,
 | `JWT_SECRET`    | (uzun rastgele dize)                              | JWT imzalama anahtarı (zorunlu)   |
 | `JWT_ISSUER`    | `oserp-community`                                 | JWT issuer (opsiyonel)            |
 
+### IAM bootstrap ortam değişkenleri
+
+| Değişken                  | Varsayılan                                 | Açıklama                                                                                  |
+| ------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `IAM_BOOTSTRAP_COMPANY_ID` | `00000000-0000-4000-8000-000000000001`    | Sistem kullanıcısının membership alacağı placeholder company UUID'si. UUID v4 olmalı.    |
+
 Docker (compose) için ek değişkenler `.env.docker.example` dosyasında: `API_PORT`,
 `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `IAM_MIGRATIONS_DIR`.
 
@@ -301,6 +350,7 @@ Tüm IAM uçları `/iam` ön ekiyle sunulur. Kimlik doğrulama gerektiren uçlar
 | POST   | `/iam/auth/login`                  | Giriş (token üretir)      | Açık       |
 | POST   | `/iam/auth/refresh`                | Token yenileme            | Açık       |
 | POST   | `/iam/auth/logout`                 | Oturum kapatma            | Açık       |
+| POST   | `/iam/users/bootstrap-register`    | İlk sistem kullanıcısı seed | Açık (yalnızca boş DB) |
 | POST   | `/iam/users`                       | Kullanıcı oluştur         | Korumalı   |
 | GET    | `/iam/users`                       | Kullanıcıları listele     | Korumalı   |
 | GET    | `/iam/users/:userId`               | Kullanıcı getir           | Korumalı   |

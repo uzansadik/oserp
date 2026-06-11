@@ -15,3 +15,11 @@ export class ValidationError extends DomainError {
 export class ForbiddenError extends DomainError {
   readonly code = 'FORBIDDEN';
 }
+
+/**
+ * Sistem bootstrap (ilk admin seed) sadece bos DB iken kabul edilir.
+ * Dolu DB'de tekrar cagrildiginda firlatilir — HTTP katmaninda 409 doner.
+ */
+export class BootstrapNotAllowedError extends DomainError {
+  readonly code = 'BOOTSTRAP_NOT_ALLOWED';
+}

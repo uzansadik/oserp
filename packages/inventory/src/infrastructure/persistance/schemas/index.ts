@@ -15,7 +15,5 @@ export type {
   InvStockMovementLineInsert,
 } from './inv.stock-movement.schema';
 export { invInventoryLevels } from './inv.inventory-level.schema';
-export type {
-  InvInventoryLevelRow,
-  InvInventoryLevelInsert,
-} from './inv.inventory-level.schema';
+export type { InvInventoryLevelRow, InvInventoryLevelInsert } from './inv.inventory-level.schema';
+export { priceLists, priceListEntries, exchangeRates } from './inv.price-list.schema';

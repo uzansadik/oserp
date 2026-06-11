@@ -40,6 +40,7 @@ import { DrizzleStockMovementRepository } from './infrastructure/persistance/rep
 import { DrizzleInventoryLevelRepository } from './infrastructure/persistance/repositories/DrizzleInventoryLevelRepository';
 import { DrizzlePriceListRepository } from './infrastructure/persistance/repositories/DrizzlePriceListRepository';
 import { DrizzleExchangeRateProvider } from './infrastructure/persistance/repositories/DrizzleExchangeRateProvider';
+import { DrizzleLotRepository } from './infrastructure/persistance/repositories/DrizzleLotRepository';
 import {
   CreatePriceListHandler,
   AddEntryHandler,
@@ -51,6 +52,17 @@ import {
   CalculatePriceHandler,
   SetExchangeRateHandler,
 } from './application/handlers/PriceListHandlers';
+import {
+  CreateLotHandler,
+  DispatchLotsHandler,
+  ExpireLotsHandler,
+  QuarantineLotHandler,
+  AllocateSerialsHandler,
+  GetLotAggregateHandler,
+  ListLotsHandler,
+} from './application/handlers/LotHandlers';
+import { FefoDispatchStrategy } from './application/services/FefoDispatchStrategy';
+import { LotExpiryService } from './application/services/LotExpiryService';
 import { PricingCalculatorImpl } from './application/services/PricingCalculatorImpl';
 import type { InventoryDb } from './infrastructure/persistance/db';
 
@@ -78,11 +90,14 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
   const inventoryLevels = new DrizzleInventoryLevelRepository(db);
   const priceLists = new DrizzlePriceListRepository(db);
   const exchangeRateProvider = new DrizzleExchangeRateProvider(db);
+  const lotRepo = new DrizzleLotRepository(db);
 
   // Services
   const projection = new StockProjectionServiceImpl(uow, inventoryLevels);
   const reorderEvaluator = new DefaultReorderEvaluator();
   const pricingCalculator = new PricingCalculatorImpl(priceLists, exchangeRateProvider);
+  const fefoStrategy = new FefoDispatchStrategy();
+  const lotExpiryService = new LotExpiryService(lotRepo);
 
   const commands = {
     // Product
@@ -106,6 +121,12 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     updateEntry: new UpdateEntryHandler(priceLists),
     archivePriceList: new ArchivePriceListHandler(priceLists),
     setExchangeRate: new SetExchangeRateHandler(exchangeRateProvider),
+    // Lots
+    createLot: new CreateLotHandler(lotRepo),
+    dispatchLots: new DispatchLotsHandler(lotRepo, fefoStrategy),
+    expireLots: new ExpireLotsHandler(lotRepo),
+    quarantineLot: new QuarantineLotHandler(lotRepo),
+    allocateSerials: new AllocateSerialsHandler(lotRepo),
   } as const;
 
   const queries = {
@@ -122,14 +143,17 @@ export function createInventoryContainer(config: InventoryContainerConfig) {
     getPriceList: new GetPriceListHandler(priceLists),
     listPriceLists: new ListPriceListsHandler(priceLists),
     calculatePrice: new CalculatePriceHandler(pricingCalculator),
+    // Lots
+    getLotAggregate: new GetLotAggregateHandler(lotRepo),
+    listLots: new ListLotsHandler(lotRepo),
   } as const;
 
   return {
     config,
     adapters: { clock, uuid, eventBus, outboxPublisher },
-    services: { projection, reorderEvaluator, pricingCalculator },
+    services: { projection, reorderEvaluator, pricingCalculator, fefoStrategy, lotExpiryService },
     uow,
-    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider },
+    repositories: { products, stockMovements, inventoryLevels, priceLists, exchangeRateProvider, lotRepo },
     commands,
     queries,
   };
